@@ -4,6 +4,7 @@ import { renderScan } from './modules/camera.js';
 import { renderInventory } from './modules/inventory.js';
 import { renderAlerts } from './modules/alerts.js';
 import { renderInsights } from './modules/insights.js';
+import { renderAssistant } from './modules/assistant.js';
 import { renderSettings } from './modules/settings.js';
 
 const routes = {
@@ -11,6 +12,7 @@ const routes = {
   inventory: renderInventory,
   alerts: renderAlerts,
   insights: renderInsights,
+  assistant: renderAssistant,
   settings: renderSettings,
 };
 
@@ -30,7 +32,6 @@ export function toast(message, type = 'info') {
   }, 3200);
 }
 
-// api module raises toast on failure through this hook
 api.onError = (msg) => toast(msg, 'error');
 
 function currentTab() {
@@ -40,6 +41,7 @@ function currentTab() {
 
 async function navigate() {
   const tab = currentTab();
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
   document.querySelectorAll('.tab').forEach((t) => {
     t.classList.toggle('active', t.dataset.tab === tab);
   });
