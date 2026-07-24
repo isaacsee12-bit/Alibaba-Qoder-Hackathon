@@ -6,10 +6,14 @@ import { toast } from '../app.js';
 import { esc, categoryOptions, toDateInputValue } from './util.js';
 
 const DEMO_IMAGES = [
-  { file: 'demo-images/banana.png', label: 'Banana' },
-  { file: 'demo-images/apple.png', label: 'Apple' },
-  { file: 'demo-images/bread.png', label: 'Bread' },
-  { file: 'demo-images/tomato.png', label: 'Tomato' },
+  { file: 'demo-images/banana.png', label: 'Banana', name: 'banana', category: 'fruit', shelfDays: 5 },
+  { file: 'demo-images/apple.png', label: 'Apple', name: 'apple', category: 'fruit', shelfDays: 14 },
+  { file: 'demo-images/bread.png', label: 'Bread', name: 'bread', category: 'grain', shelfDays: 4 },
+  { file: 'demo-images/tomato.png', label: 'Tomato', name: 'tomato', category: 'vegetable', shelfDays: 6 },
+  { file: 'demo-images/strawberry.svg', label: 'Strawberries', name: 'strawberry', category: 'fruit', shelfDays: 5 },
+  { file: 'demo-images/broccoli.svg', label: 'Broccoli', name: 'broccoli', category: 'vegetable', shelfDays: 7 },
+  { file: 'demo-images/avocado.svg', label: 'Avocado', name: 'avocado', category: 'fruit', shelfDays: 4 },
+  { file: 'demo-images/yogurt.svg', label: 'Yogurt', name: 'yogurt', category: 'dairy', shelfDays: 10 },
 ];
 
 const MAX_DIM = 512;
@@ -49,7 +53,7 @@ export async function renderScan(view) {
     <h3>Or try a demo image</h3>
     <div class="demo-strip" id="demo-strip">
       ${DEMO_IMAGES.map((d, i) => `
-        <button class="demo-thumb" data-idx="${i}" title="${esc(d.label)}">
+        <button class="demo-thumb" data-idx="${i}" title="${esc(d.label)}" aria-label="Try ${esc(d.label)} demo image">
           <img src="${d.file}" alt="${esc(d.label)}" loading="lazy">
         </button>`).join('')}
     </div>
@@ -104,7 +108,7 @@ export async function renderScan(view) {
     try {
       const res = await fetch(demo.file);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      handleImage(await res.blob(), stage);
+      await handleImage(await res.blob(), stage, demo);
     } catch {
       toast('Could not load demo image.', 'error');
     }
@@ -132,7 +136,7 @@ export async function renderScan(view) {
   });
 }
 
-async function handleImage(blob, stage) {
+async function handleImage(blob, stage, demo = null) {
   const previewUrl = URL.createObjectURL(blob);
   stage.innerHTML = `
     <div class="card">
@@ -157,7 +161,7 @@ async function handleImage(blob, stage) {
 
   const progressEl = stage.querySelector('#scan-progress');
   const fillEl = stage.querySelector('#scan-progress-fill');
-  const result = await classifyImage(small, (p) => {
+  let result = await classifyImage(small, (p) => {
     if (p.stage === 'download' && fillEl) {
       progressEl.firstChild.textContent = '';
       progressEl.childNodes[1].textContent = ` Downloading model… ${p.pct}%`;
@@ -167,6 +171,20 @@ async function handleImage(blob, stage) {
     }
   });
 
+  // Curated demo images should always demonstrate the named food, even when the
+  // generic classifier is unavailable or returns a broad ImageNet label.
+  if (demo) {
+    result = {
+      ...result,
+      name: demo.name,
+      category: demo.category,
+      shelfDays: demo.shelfDays,
+      confidence: 0.99,
+      alternatives: [],
+      source: 'demo',
+    };
+  }
+
   renderResultCard(stage, previewUrl, result);
 }
 
@@ -174,9 +192,11 @@ function renderResultCard(stage, previewUrl, result) {
   const shelfDays = result.shelfDays ?? 7;
   const defaultExpiry = toDateInputValue(isoInDays(shelfDays));
   const confPct = Math.round(result.confidence * 100);
-  const sourceNote = result.source === 'mock'
-    ? '<span class="source-note">quick estimate</span>'
-    : `<span class="source-note">on-device AI${result.model ? ` · ${esc(result.model.split('/')[1] || result.model)}` : ''}</span>`;
+  const sourceNote = result.source === 'demo'
+    ? '<span class="source-note">curated demo</span>'
+    : result.source === 'mock'
+      ? '<span class="source-note">quick estimate</span>'
+      : `<span class="source-note">on-device AI${result.model ? ` · ${esc(result.model.split('/')[1] || result.model)}` : ''}</span>`;
 
   stage.innerHTML = `
     <div class="card urgency-fresh">
@@ -229,7 +249,7 @@ function renderResultCard(stage, previewUrl, result) {
       category: q('#r-category').value,
       quantity: Number(q('#r-qty').value) || 1,
       unit: q('#r-unit').value.trim() || 'pcs',
-      source: 'cv',
+      source: result.source === 'demo' ? 'demo' : 'cv',
       confidence: result.confidence,
     };
     if (expiry) payload.expiresAt = new Date(`${expiry}T12:00:00`).toISOString();
