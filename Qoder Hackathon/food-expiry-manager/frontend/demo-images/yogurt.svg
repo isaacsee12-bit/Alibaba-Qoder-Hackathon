@@ -1,12 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" role="img" aria-label="Yogurt cup with berries">
-  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f8f2ff"/><stop offset="1" stop-color="#edf8f0"/></linearGradient></defs>
-  <rect width="320" height="240" rx="28" fill="url(#bg)"/>
-  <ellipse cx="160" cy="198" rx="88" ry="17" fill="#d9e3dc"/>
-  <path d="M92 72h136l-15 119c-2 13-12 22-25 22h-56c-13 0-23-9-25-22z" fill="#fff" stroke="#c7d7cf" stroke-width="5"/>
-  <ellipse cx="160" cy="72" rx="68" ry="20" fill="#eef6f1" stroke="#c7d7cf" stroke-width="5"/>
-  <ellipse cx="160" cy="76" rx="55" ry="13" fill="#fffdf8"/>
-  <path d="M116 125c25-20 64-20 88 0v42c-25 18-64 18-88 0z" fill="#7c4ca5" opacity=".9"/>
-  <text x="160" y="151" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" font-weight="700" fill="#fff">YOGURT</text>
-  <g fill="#d83d68" stroke="#a51f48" stroke-width="2"><circle cx="132" cy="72" r="10"/><circle cx="158" cy="68" r="11"/><circle cx="184" cy="73" r="10"/></g>
-  <path d="M128 61l7-10 5 11M154 57l6-11 6 11M180 62l6-10 5 11" fill="none" stroke="#4f9958" stroke-width="4" stroke-linecap="round"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Yogurt photo on white background"><image width="256" height="256" href="data:image/webp;base64,UklGRiQDAABXRUJQVlA4IBgDAACwKgCdASoAAQABPrVapE6nKSumI3Qp8XAWiWlu4MCUZplRpK769q8gxiIiIiIiIiIiIiIiIiIiIiIhYJHK7dpe/rd+zEEF5dX2ikUV6UfRO5takXHiKy8KUi2tBrWzpIbX6NyWtIUvZzIioWOUyy6AHfCKsmsxcl64j9gCHvovIHzXWnsim8Cdk69R89M+IVN8xbfI7FvbTqCXQFdOqEIwAQgI1wj9KqGDLaGWd/vavgiO7ekw2dYCdm4gLXyjVQXzpb5EQqWDX8IlJU7kO4qSoCqCxd1a3u3PeNqpPcwFYOMXd0tQvRkyGXNaEfZcg3oNFv8A92KncfntpvQKzMSs8CrolLMgriYwBVVUinhflwDKE7biNDTVnW3KPDgRF9X5We52uG2VT+/9zhhMCEVhAkRaUTMyoGEedmXI1PWKs2/yXaU/w4RLFpO7u1V2MqwdRI0szMzMzMzi8zMvwAD+gwAAAAADFti+5wMe1o18oscBsBz6BMKBnP9LTocWgKr6pAFFoSXZf/CjQl3DaYJP3MbTiIVBrwSkXzX1j4S3f8AFhYqziPJmRn3E27rEDqJVXVQu43gOmRjmVWiN9xLBoyQ+Dnv9Sx8KkR/socI3sKhjkc+IHMuHxOCbruJS8yb/OWUAwxr3Fmw2TlJz4VHnMZHxdjXiR7tJWOFTcWEuLvs7A0cyKbI2lky7GWdv711qLZ/05zht2LmxlKYVJV79eu0ODazflii1qjbkkzRJsBg7Cf9E1ljFI8YCwZfPy+T2qJtShNrLYKLTPFHJcAGnfRnPz9ddj3e+x+KkhCXIGsjgC3ZPgqcBCVAJIOMGO6lW5GEAU/UbcFadCNF282PzrpF/5loGqukmLsqwCKkeXwM77I7idoSWRjLrLTgAZXED1c8jSqRtuLgWFmI6469dt31VAnBujyfsYKDO7fLeruhYiVO52QF/KwYPbhBY6Leovf2Gc4iMYnwzE3iOkkVxfZpMc/J/oU5HOLbXHenmKM2vytKvqW8STeuMGgy7bXJuEckrNHp3MgHqeOSLjSOYxHtgAAAAAAA="/></svg>
