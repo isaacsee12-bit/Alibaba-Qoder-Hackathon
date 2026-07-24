@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" role="img" aria-label="Strawberries on a plate">
+  <defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff8ee"/><stop offset="1" stop-color="#e8f6e8"/></linearGradient></defs>
+  <rect width="320" height="240" rx="28" fill="url(#b)"/>
+  <ellipse cx="160" cy="170" rx="112" ry="37" fill="#fff" stroke="#d8e6da" stroke-width="5"/>
+  <g stroke="#a91f2d" stroke-width="3">
+    <path d="M87 74c-27 15-35 52-15 78 16 21 45 31 61 11 20-25 11-77-15-90-10-5-21-4-31 1z" fill="#e83e4d"/>
+    <path d="M143 63c-25 17-29 57-7 80 18 19 48 25 62 3 17-27 2-77-26-87-10-4-20-2-29 4z" fill="#f04b57"/>
+    <path d="M208 79c-26 13-37 49-19 76 15 22 43 34 61 16 22-23 17-75-8-90-10-6-23-7-34-2z" fill="#df3044"/>
+  </g>
+  <g fill="#ffd36b"><circle cx="93" cy="104" r="3"/><circle cx="108" cy="128" r="3"/><circle cx="81" cy="133" r="3"/><circle cx="158" cy="95" r="3"/><circle cx="174" cy="121" r="3"/><circle cx="145" cy="128" r="3"/><circle cx="218" cy="112" r="3"/><circle cx="235" cy="137" r="3"/><circle cx="207" cy="144" r="3"/></g>
+  <g fill="#3f9654"><path d="M79 77l17-22 8 18 16-15 1 23z"/><path d="M138 66l18-23 8 18 17-16 2 23z"/><path d="M202 82l19-22 7 19 18-13-1 23z"/></g>
+</svg>
