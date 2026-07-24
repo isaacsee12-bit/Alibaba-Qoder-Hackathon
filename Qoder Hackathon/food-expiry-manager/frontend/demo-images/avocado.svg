@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" role="img" aria-label="Halved avocado">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff8e8"/><stop offset="1" stop-color="#eaf5dc"/></linearGradient></defs>
+  <rect width="320" height="240" rx="28" fill="url(#bg)"/>
+  <ellipse cx="160" cy="194" rx="104" ry="18" fill="#d9e7c8"/>
+  <path d="M113 45c-20 21-51 70-47 112 3 35 30 55 62 44 31-10 46-42 41-75-6-39-34-72-56-81z" fill="#315f37"/>
+  <path d="M113 57c-18 19-42 61-39 96 3 27 23 43 48 35 25-8 38-35 34-61-5-32-26-61-43-70z" fill="#91c84d"/>
+  <path d="M207 49c-21 18-50 61-52 103-2 35 22 58 55 51 32-7 50-37 48-70-2-39-28-75-51-84z" fill="#376b3c"/>
+  <path d="M207 61c-18 16-42 53-44 88-1 27 17 45 43 40 25-6 40-30 38-57-2-32-23-63-37-71z" fill="#a7d65d"/>
+  <circle cx="205" cy="142" r="31" fill="#8d542f" stroke="#6d3c22" stroke-width="5"/>
+  <circle cx="205" cy="136" r="17" fill="#b87547" opacity=".7"/>
+</svg>
