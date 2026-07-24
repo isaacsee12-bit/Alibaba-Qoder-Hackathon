@@ -48,6 +48,9 @@ export const api = {
   // insights
   getInsights: (opts) => request('GET', '/insights', null, opts),
 
+  // voice assistant
+  askAssistant: (payload, opts) => request('POST', '/assistant', payload, opts),
+
   // reliability
   getReliabilityFlags: (opts) => request('GET', '/reliability/flags', null, opts),
   runReliabilityScan: (opts) => request('POST', '/reliability/scan', null, opts),

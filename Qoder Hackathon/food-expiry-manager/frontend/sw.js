@@ -1,11 +1,12 @@
 // Service worker: cache-first for static app shell, network-first for /api/*.
-const CACHE_NAME = 'freshtrack-v4';
+const CACHE_NAME = 'freshtrack-v5';
 
 const SHELL = [
   './',
   './index.html',
   './styles.css',
   './visual-refresh.css',
+  './assistant.css',
   './app.js',
   './manifest.json',
   './modules/api.js',
@@ -17,6 +18,7 @@ const SHELL = [
   './modules/inventory.js',
   './modules/alerts.js',
   './modules/insights.js',
+  './modules/assistant.js',
   './modules/settings.js',
   './icons/icon.svg',
   './icons/icon-192.png',
@@ -48,12 +50,10 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  // never cache mutations
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
 
-  // network-first for API calls, falling back to last cached response
   if (url.origin === location.origin && url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request)
@@ -69,7 +69,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // cache-first for same-origin static assets
   if (url.origin === location.origin) {
     event.respondWith(
       caches.match(request).then((hit) => {
@@ -84,5 +83,4 @@ self.addEventListener('fetch', (event) => {
       })
     );
   }
-  // cross-origin (e.g. model CDN) → default browser behavior
 });
