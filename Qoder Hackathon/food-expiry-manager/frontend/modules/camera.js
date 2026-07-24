@@ -18,18 +18,67 @@ const DEMO_IMAGES = [
 
 const MAX_DIM = 512;
 
+function canvasToJpeg(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('Canvas conversion failed'));
+    }, 'image/jpeg', 0.85);
+  });
+}
+
+/** Decode with an HTML image as a fallback for SVGs unsupported by createImageBitmap. */
+async function decodeWithImageElement(blob) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const image = new Image();
+    image.decoding = 'async';
+    image.src = url;
+    await image.decode();
+    return image;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 /** Downscale an image blob so its longest side is ≤ MAX_DIM px. */
 async function downscale(blob) {
-  const bitmap = await createImageBitmap(blob);
-  const scale = Math.min(1, MAX_DIM / Math.max(bitmap.width, bitmap.height));
-  const w = Math.max(1, Math.round(bitmap.width * scale));
-  const h = Math.max(1, Math.round(bitmap.height * scale));
+  let source;
+  let width;
+  let height;
+  let closeSource = () => {};
+
+  try {
+    source = await createImageBitmap(blob);
+    width = source.width;
+    height = source.height;
+    closeSource = () => source.close();
+  } catch {
+    source = await decodeWithImageElement(blob);
+    width = source.naturalWidth;
+    height = source.naturalHeight;
+  }
+
+  if (!width || !height) {
+    closeSource();
+    throw new Error('Image has no readable dimensions');
+  }
+
+  const scale = Math.min(1, MAX_DIM / Math.max(width, height));
+  const w = Math.max(1, Math.round(width * scale));
+  const h = Math.max(1, Math.round(height * scale));
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
-  canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
-  bitmap.close();
-  return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+
+  try {
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas is unavailable');
+    context.drawImage(source, 0, 0, w, h);
+    return await canvasToJpeg(canvas);
+  } finally {
+    closeSource();
+  }
 }
 
 function isoInDays(days) {
