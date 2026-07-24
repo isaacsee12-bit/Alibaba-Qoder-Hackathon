@@ -1,40 +1,17 @@
 /**
  * db/seed.js — demo data seeding.
  *
- * Seeds ~15 demo items (source 'demo') on first run (empty items table),
- * covering all urgency states: 3 already expired, 4 expiring in 1–3 days,
- * 8 fresh — spread across categories. reseed() removes demo items and
- * seeds them again.
+ * Seeds 15 demo items on first run. Each reseed rotates to a different curated
+ * inventory while preserving expired, expiring-soon, and fresh examples.
  */
 const db = require('./db');
 const shelfLife = require('../services/shelfLife');
+const { DEMO_SETS, nextDemoSet } = require('../data/demo_sets');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// [name, category, quantity, unit, addedDaysAgo, expiresInDays]
-const DEMO_ITEMS = [
-  // 3 already expired
-  ['milk', 'dairy', 1, 'liter', 8, -2],
-  ['spinach', 'vegetable', 200, 'g', 6, -1],
-  ['chicken breast', 'meat', 500, 'g', 5, -3],
-  // 4 expiring in 1–3 days
-  ['banana', 'fruit', 5, 'pcs', 4, 2],
-  ['lettuce', 'vegetable', 1, 'head', 5, 2],
-  ['salmon', 'seafood', 300, 'g', 1, 1],
-  ['tomato', 'vegetable', 4, 'pcs', 4, 3],
-  // 8 fresh
-  ['eggs', 'dairy', 12, 'pcs', 2, 30],
-  ['cheddar cheese', 'dairy', 250, 'g', 3, 25],
-  ['apple', 'fruit', 6, 'pcs', 1, 20],
-  ['carrot', 'vegetable', 500, 'g', 2, 14],
-  ['orange juice', 'beverage', 1, 'liter', 1, 6],
-  ['white rice', 'grain', 2, 'kg', 10, 300],
-  ['pasta', 'grain', 500, 'g', 10, 400],
-  ['frozen peas', 'frozen', 400, 'g', 7, 180],
-];
-
-function buildDemoRows(now = new Date()) {
-  return DEMO_ITEMS.map(([name, category, quantity, unit, addedDaysAgo, expiresInDays]) => {
+function buildDemoRows(items = DEMO_SETS[0], now = new Date()) {
+  return items.map(([name, category, quantity, unit, addedDaysAgo, expiresInDays]) => {
     const nutrition = shelfLife.getNutrition(name);
     return {
       name,
@@ -67,18 +44,21 @@ function insertRows(rows) {
 function seedIfEmpty() {
   const { n } = db.get('SELECT COUNT(*) AS n FROM items');
   if (n > 0) return 0;
-  return insertRows(buildDemoRows());
+  return insertRows(buildDemoRows(DEMO_SETS[0]));
 }
 
-/** Delete demo items (and their flags/logs) and seed fresh ones. */
+/** Delete demo items and rotate to a guaranteed-different curated set. */
 function reseed() {
-  const demoIds = db.all("SELECT id FROM items WHERE source = 'demo'").map((r) => r.id);
-  for (const id of demoIds) {
+  const current = db.all("SELECT id, name FROM items WHERE source = 'demo'");
+  const nextSet = nextDemoSet(current.map((row) => row.name));
+
+  for (const { id } of current) {
     db.run('DELETE FROM reliability_flags WHERE item_id = ?', [id]);
     db.run('DELETE FROM consumption_log WHERE item_id = ?', [id]);
     db.run('DELETE FROM items WHERE id = ?', [id]);
   }
-  return insertRows(buildDemoRows());
+
+  return insertRows(buildDemoRows(nextSet));
 }
 
 module.exports = { seedIfEmpty, reseed };
