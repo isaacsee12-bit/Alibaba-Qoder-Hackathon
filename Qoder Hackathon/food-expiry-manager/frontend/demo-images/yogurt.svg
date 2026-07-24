@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" role="img" aria-label="Yogurt cup with berries">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f8f2ff"/><stop offset="1" stop-color="#edf8f0"/></linearGradient></defs>
+  <rect width="320" height="240" rx="28" fill="url(#bg)"/>
+  <ellipse cx="160" cy="198" rx="88" ry="17" fill="#d9e3dc"/>
+  <path d="M92 72h136l-15 119c-2 13-12 22-25 22h-56c-13 0-23-9-25-22z" fill="#fff" stroke="#c7d7cf" stroke-width="5"/>
+  <ellipse cx="160" cy="72" rx="68" ry="20" fill="#eef6f1" stroke="#c7d7cf" stroke-width="5"/>
+  <ellipse cx="160" cy="76" rx="55" ry="13" fill="#fffdf8"/>
+  <path d="M116 125c25-20 64-20 88 0v42c-25 18-64 18-88 0z" fill="#7c4ca5" opacity=".9"/>
+  <text x="160" y="151" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" font-weight="700" fill="#fff">YOGURT</text>
+  <g fill="#d83d68" stroke="#a51f48" stroke-width="2"><circle cx="132" cy="72" r="10"/><circle cx="158" cy="68" r="11"/><circle cx="184" cy="73" r="10"/></g>
+  <path d="M128 61l7-10 5 11M154 57l6-11 6 11M180 62l6-10 5 11" fill="none" stroke="#4f9958" stroke-width="4" stroke-linecap="round"/>
+</svg>

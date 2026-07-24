@@ -1,10 +1,11 @@
 // Service worker: cache-first for static app shell, network-first for /api/*.
-const CACHE_NAME = 'fem-v2';
+const CACHE_NAME = 'freshtrack-v3';
 
 const SHELL = [
   './',
   './index.html',
   './styles.css',
+  './visual-refresh.css',
   './app.js',
   './manifest.json',
   './modules/api.js',
@@ -20,10 +21,15 @@ const SHELL = [
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './assets/fresh-pantry.svg',
   './demo-images/banana.png',
   './demo-images/apple.png',
   './demo-images/bread.png',
   './demo-images/tomato.png',
+  './demo-images/strawberry.svg',
+  './demo-images/broccoli.svg',
+  './demo-images/avocado.svg',
+  './demo-images/yogurt.svg',
 ];
 
 self.addEventListener('install', (event) => {
