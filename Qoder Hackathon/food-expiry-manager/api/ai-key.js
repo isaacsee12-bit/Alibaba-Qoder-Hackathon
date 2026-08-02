@@ -3,9 +3,15 @@ const {
   clearUserKeyCookie,
   keyStatus,
   resolveApiKey,
+  resolveServerApiKey,
   writeUserKeyCookie,
 } = require('../lib/secure-ai-key');
-const { friendlyOpenAIError, validateApiKey } = require('../lib/openai-food');
+const {
+  friendlyAiError,
+  normalizeProvider,
+  providerLabel,
+  validateProviderApiKey,
+} = require('../lib/ai-provider');
 
 function json(res, status, body) {
   res.statusCode = status;
@@ -29,6 +35,7 @@ function bodyOf(req) {
 
 module.exports = async function handler(req, res) {
   const method = String(req.method || 'GET').toUpperCase();
+  let provider = null;
 
   try {
     if (method === 'GET') {
@@ -38,10 +45,11 @@ module.exports = async function handler(req, res) {
     if (method === 'DELETE') {
       assertSameOrigin(req);
       clearUserKeyCookie(req, res);
-      const serverConnected = Boolean(process.env.OPENAI_API_KEY || process.env.LLM_API_KEY);
+      const server = resolveServerApiKey();
       return json(res, 200, {
-        connected: serverConnected,
-        source: serverConnected ? 'server' : 'none',
+        connected: Boolean(server.key),
+        provider: server.provider,
+        source: server.source,
         suffix: null,
         canSaveBrowserKey: keyStatus(req).canSaveBrowserKey,
       });
@@ -54,33 +62,54 @@ module.exports = async function handler(req, res) {
 
     if (body.action === 'test') {
       const resolved = resolveApiKey(req);
-      if (!resolved.key) return json(res, 409, { error: 'No AI API key is connected.', code: 'AI_KEY_REQUIRED' });
-      await validateApiKey(resolved.key);
+      provider = resolved.provider;
+      if (!resolved.key || !provider) {
+        return json(res, 409, {
+          error: 'No AI API key is connected.',
+          code: 'AI_KEY_REQUIRED',
+        });
+      }
+      await validateProviderApiKey(provider, resolved.key);
       return json(res, 200, {
         ok: true,
+        provider,
         source: resolved.source,
-        message: 'Connection successful.',
+        message: `${providerLabel(provider)} connection successful.`,
+      });
+    }
+
+    provider = normalizeProvider(body.provider || 'openai');
+    if (!provider) {
+      return json(res, 400, {
+        error: 'Choose OpenAI or Google Gemini.',
+        code: 'INVALID_AI_PROVIDER',
       });
     }
 
     const apiKey = String(body.key || '').trim();
     if (apiKey.length < 20 || apiKey.length > 512) {
-      return json(res, 400, { error: 'Enter a valid OpenAI API key.', code: 'INVALID_KEY_FORMAT' });
+      return json(res, 400, {
+        error: `Enter a valid ${providerLabel(provider)} API key.`,
+        code: 'INVALID_KEY_FORMAT',
+      });
     }
 
-    await validateApiKey(apiKey);
-    writeUserKeyCookie(req, res, apiKey);
+    await validateProviderApiKey(provider, apiKey);
+    writeUserKeyCookie(req, res, provider, apiKey);
     return json(res, 200, {
       connected: true,
+      provider,
       source: 'user',
       suffix: apiKey.slice(-4),
       canSaveBrowserKey: true,
-      message: 'API key connected securely.',
+      message: `${providerLabel(provider)} API key connected securely.`,
     });
   } catch (error) {
     const status = error.status || 502;
     return json(res, status, {
-      error: error.code === 'AI_KEY_CONFIG_MISSING' ? error.message : friendlyOpenAIError(error),
+      error: error.code === 'AI_KEY_CONFIG_MISSING'
+        ? error.message
+        : friendlyAiError(provider || 'openai', error),
       code: error.code || 'AI_KEY_REQUEST_FAILED',
     });
   }
