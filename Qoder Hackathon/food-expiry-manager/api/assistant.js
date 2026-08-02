@@ -3,8 +3,8 @@ const { resolveApiKey } = require('../lib/secure-ai-key');
 const {
   askFoodAssistant,
   cleanItems,
-  friendlyOpenAIError,
-} = require('../lib/openai-food');
+  friendlyAiError,
+} = require('../lib/ai-provider');
 
 function json(res, status, body) {
   res.statusCode = status;
@@ -61,28 +61,36 @@ module.exports = async function handler(req, res) {
   if (!question) return json(res, 400, { error: 'question is required' });
 
   const resolved = resolveApiKey(req);
-  if (!resolved.key) {
+  if (!resolved.key || !resolved.provider) {
     return json(res, 200, {
       answer: fallbackAnswer(question, items),
       ai: false,
+      provider: null,
       keySource: 'none',
     });
   }
 
   try {
-    const result = await askFoodAssistant(resolved.key, question, items);
+    const result = await askFoodAssistant(
+      resolved.provider,
+      resolved.key,
+      question,
+      items
+    );
     return json(res, 200, {
       ...result,
       ai: true,
+      provider: resolved.provider,
       keySource: resolved.source,
     });
   } catch (error) {
-    console.error('Assistant AI failed:', error.message);
+    console.error(`${resolved.provider} assistant failed:`, error.message);
     return json(res, 200, {
       answer: fallbackAnswer(question, items),
       ai: false,
+      provider: resolved.provider,
       keySource: resolved.source,
-      warning: friendlyOpenAIError(error),
+      warning: friendlyAiError(resolved.provider, error),
       code: error.code || 'AI_ASSISTANT_FAILED',
     });
   }
