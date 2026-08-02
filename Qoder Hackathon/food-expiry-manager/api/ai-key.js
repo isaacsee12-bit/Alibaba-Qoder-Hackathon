@@ -6,12 +6,6 @@ const {
   resolveServerApiKey,
   writeUserKeyCookie,
 } = require('../lib/secure-ai-key');
-const {
-  friendlyAiError,
-  normalizeProvider,
-  providerLabel,
-  validateProviderApiKey,
-} = require('../lib/ai-provider');
 
 function json(res, status, body) {
   res.statusCode = status;
@@ -31,6 +25,21 @@ function bodyOf(req) {
     }
   }
   return {};
+}
+
+function providerTools() {
+  // Load provider adapters only when validating or testing a key. A simple GET
+  // status check must not depend on either provider SDK/request implementation.
+  return require('../lib/ai-provider');
+}
+
+function friendlyError(provider, error) {
+  if (error?.code === 'AI_KEY_CONFIG_MISSING') return error.message;
+  try {
+    return providerTools().friendlyAiError(provider || 'openai', error);
+  } catch {
+    return error?.message || 'The AI connection request failed.';
+  }
 }
 
 module.exports = async function handler(req, res) {
@@ -59,6 +68,11 @@ module.exports = async function handler(req, res) {
 
     assertSameOrigin(req);
     const body = bodyOf(req);
+    const {
+      normalizeProvider,
+      providerLabel,
+      validateProviderApiKey,
+    } = providerTools();
 
     if (body.action === 'test') {
       const resolved = resolveApiKey(req);
@@ -105,12 +119,9 @@ module.exports = async function handler(req, res) {
       message: `${providerLabel(provider)} API key connected securely.`,
     });
   } catch (error) {
-    const status = error.status || 502;
-    return json(res, status, {
-      error: error.code === 'AI_KEY_CONFIG_MISSING'
-        ? error.message
-        : friendlyAiError(provider || 'openai', error),
-      code: error.code || 'AI_KEY_REQUEST_FAILED',
+    return json(res, error?.status || 502, {
+      error: friendlyError(provider, error),
+      code: error?.code || 'AI_KEY_REQUEST_FAILED',
     });
   }
 };

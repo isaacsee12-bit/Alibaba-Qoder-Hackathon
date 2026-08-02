@@ -14,6 +14,12 @@ function providerPlaceholder(provider) {
 }
 
 function describeStatus(status) {
+  if (status.statusError) {
+    return {
+      badge: 'Status warning',
+      text: `${status.statusError} You can still connect a key; the server will show the exact setup error if anything is missing.`,
+    };
+  }
   const name = providerName(status.provider);
   if (status.source === 'user') {
     return {
@@ -30,7 +36,7 @@ function describeStatus(status) {
   if (!status.canSaveBrowserKey) {
     return {
       badge: 'Setup needed',
-      text: 'Add APP_ENCRYPTION_SECRET in Vercel before connecting a browser API key.',
+      text: 'Add APP_ENCRYPTION_SECRET in Vercel with at least 32 characters, then redeploy before connecting a browser API key.',
     };
   }
   return {
@@ -124,6 +130,7 @@ export async function renderSettings(view) {
     source: 'none',
     suffix: null,
     canSaveBrowserKey: false,
+    statusError: null,
   };
 
   function renderProviderInput() {
@@ -139,7 +146,7 @@ export async function renderSettings(view) {
     description.textContent = copy.text;
     if (status.provider) providerSelect.value = status.provider;
     renderProviderInput();
-    saveButton.disabled = !status.canSaveBrowserKey;
+    saveButton.disabled = status.statusError ? false : !status.canSaveBrowserKey;
     testButton.disabled = !status.connected;
     clearButton.disabled = status.source !== 'user';
   }
@@ -147,12 +154,15 @@ export async function renderSettings(view) {
   async function refreshKeyStatus() {
     try {
       renderKeyStatus(await api.getAiKeyStatus({ silent: true }));
-    } catch {
-      badge.textContent = 'Unavailable';
-      description.textContent = 'Could not check the AI connection.';
-      saveButton.disabled = true;
-      testButton.disabled = true;
-      clearButton.disabled = true;
+    } catch (error) {
+      renderKeyStatus({
+        connected: false,
+        provider: null,
+        source: 'none',
+        suffix: null,
+        canSaveBrowserKey: true,
+        statusError: `Could not check the AI connection${error?.message ? `: ${error.message}` : '.'}`,
+      });
     }
   }
 
@@ -199,7 +209,7 @@ export async function renderSettings(view) {
       await refreshKeyStatus();
     } finally {
       saveButton.textContent = 'Connect key';
-      saveButton.disabled = !currentStatus.canSaveBrowserKey;
+      saveButton.disabled = currentStatus.statusError ? false : !currentStatus.canSaveBrowserKey;
     }
   });
 

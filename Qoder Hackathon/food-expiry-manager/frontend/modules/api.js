@@ -54,7 +54,7 @@ export const api = {
   getInsights: (opts) => request('GET', '/insights', null, opts),
 
   // AI connection, assistant, and vision scan
-  getAiKeyStatus: (opts) => request('GET', '/ai-key', null, opts),
+  getAiKeyStatus: (opts) => request('GET', '/ai-status', null, opts),
   saveAiKey: (provider, key, opts) => request('POST', '/ai-key', { provider, key }, opts),
   testAiKey: (opts) => request('POST', '/ai-key', { action: 'test' }, opts),
   clearAiKey: (opts) => request('DELETE', '/ai-key', null, opts),
