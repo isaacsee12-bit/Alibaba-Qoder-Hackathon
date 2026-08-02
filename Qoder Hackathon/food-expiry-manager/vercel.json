@@ -1,12 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/api/demo/reseed", "destination": "/api/demo-reseed.js" },
-    { "source": "/api/ai-status", "destination": "/api/router.js?__route=ai-status" },
-    { "source": "/api/ai-key", "destination": "/api/router.js?__route=ai-key" },
-    { "source": "/api/scan", "destination": "/api/router.js?__route=scan" },
-    { "source": "/api/assistant", "destination": "/api/router.js?__route=assistant" },
-    { "source": "/api/:path*", "destination": "/api/router.js?__route=:path*" },
+    { "source": "/api/:path*", "destination": "/api/router?__route=:path*" },
     { "source": "/", "destination": "/frontend/index.html" },
     { "source": "/:path*", "destination": "/frontend/:path*" }
   ]
