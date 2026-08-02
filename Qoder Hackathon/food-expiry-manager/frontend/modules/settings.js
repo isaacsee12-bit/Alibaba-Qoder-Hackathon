@@ -1,21 +1,30 @@
-// Settings tab: demo reseed, reliability scan, secure AI key connection, cache reset.
+// Settings tab: demo reseed, reliability scan, secure multi-provider AI key connection, cache reset.
 
 import { api } from './api.js';
 import { toast, refreshAlertBadge } from '../app.js';
 
 const LEGACY_KEY_STORAGE = 'fem.llmKey';
 
+function providerName(provider) {
+  return provider === 'gemini' ? 'Google Gemini' : 'OpenAI';
+}
+
+function providerPlaceholder(provider) {
+  return provider === 'gemini' ? 'AIza...' : 'sk-...';
+}
+
 function describeStatus(status) {
+  const name = providerName(status.provider);
   if (status.source === 'user') {
     return {
-      badge: 'Connected',
+      badge: `${name} connected`,
       text: `Browser key ending in ${status.suffix || '••••'} is encrypted and ready for Scan and Ask.`,
     };
   }
   if (status.source === 'server') {
     return {
-      badge: 'Server key',
-      text: 'This deployment is using the OpenAI key configured in Vercel.',
+      badge: `${name} server key`,
+      text: `This deployment is using the ${name} key configured in Vercel.`,
     };
   }
   if (!status.canSaveBrowserKey) {
@@ -26,7 +35,7 @@ function describeStatus(status) {
   }
   return {
     badge: 'Not connected',
-    text: 'Connect an OpenAI API key to enable enhanced AI scanning and AI-generated answers.',
+    text: 'Connect an OpenAI or Google Gemini API key to enable enhanced AI scanning and generated answers.',
   };
 }
 
@@ -57,21 +66,31 @@ export async function renderSettings(view) {
     <div class="card">
       <div class="section-head">
         <div>
-          <p class="card-title">OpenAI API key</p>
+          <p class="card-title">AI provider and API key</p>
           <p class="card-sub" id="ai-key-description">Checking connection…</p>
         </div>
         <span class="pill" id="ai-key-badge">Checking</span>
       </div>
 
-      <div class="field" style="margin-top:16px">
-        <label for="llm-key">Connect or replace browser key</label>
-        <input id="llm-key" type="password" placeholder="sk-..." autocomplete="new-password" spellcheck="false">
+      <div class="field-row" style="margin-top:16px">
+        <div class="field">
+          <label for="ai-provider">Provider</label>
+          <select id="ai-provider">
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Google Gemini</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="llm-key" id="llm-key-label">OpenAI API key</label>
+          <input id="llm-key" type="password" placeholder="sk-..." autocomplete="new-password" spellcheck="false">
+        </div>
       </div>
 
       <p class="warning-note">
-        The key is validated by the backend, encrypted with <code>APP_ENCRYPTION_SECRET</code>,
-        and stored in an HttpOnly cookie. It is never saved in localStorage or committed to GitHub.
-        Disconnect it before using a shared computer.
+        The selected provider key is validated by the backend, encrypted with
+        <code>APP_ENCRYPTION_SECRET</code>, and stored in an HttpOnly cookie. It is never
+        saved in localStorage or committed to GitHub. Connecting another provider replaces
+        the current browser key.
       </p>
 
       <div class="item-actions">
@@ -90,7 +109,9 @@ export async function renderSettings(view) {
     </div>
   `;
 
+  const providerSelect = view.querySelector('#ai-provider');
   const keyInput = view.querySelector('#llm-key');
+  const keyLabel = view.querySelector('#llm-key-label');
   const badge = view.querySelector('#ai-key-badge');
   const description = view.querySelector('#ai-key-description');
   const saveButton = view.querySelector('#save-key-btn');
@@ -99,16 +120,25 @@ export async function renderSettings(view) {
 
   let currentStatus = {
     connected: false,
+    provider: null,
     source: 'none',
     suffix: null,
     canSaveBrowserKey: false,
   };
+
+  function renderProviderInput() {
+    const provider = providerSelect.value;
+    keyLabel.textContent = `${providerName(provider)} API key`;
+    keyInput.placeholder = providerPlaceholder(provider);
+  }
 
   function renderKeyStatus(status) {
     currentStatus = status;
     const copy = describeStatus(status);
     badge.textContent = copy.badge;
     description.textContent = copy.text;
+    if (status.provider) providerSelect.value = status.provider;
+    renderProviderInput();
     saveButton.disabled = !status.canSaveBrowserKey;
     testButton.disabled = !status.connected;
     clearButton.disabled = status.source !== 'user';
@@ -126,6 +156,8 @@ export async function renderSettings(view) {
     }
   }
 
+  providerSelect.addEventListener('change', renderProviderInput);
+  renderProviderInput();
   await refreshKeyStatus();
 
   view.querySelector('#reseed-btn').addEventListener('click', async (event) => {
@@ -150,18 +182,19 @@ export async function renderSettings(view) {
   });
 
   saveButton.addEventListener('click', async () => {
+    const provider = providerSelect.value;
     const value = keyInput.value.trim();
     if (!value) {
-      toast('Enter an OpenAI API key first.', 'error');
+      toast(`Enter a ${providerName(provider)} API key first.`, 'error');
       return;
     }
     saveButton.disabled = true;
     saveButton.textContent = 'Connecting…';
     try {
-      const status = await api.saveAiKey(value);
+      const status = await api.saveAiKey(provider, value);
       keyInput.value = '';
       renderKeyStatus(status);
-      toast('API key connected. Scan and Ask will now use it.', 'success');
+      toast(`${providerName(provider)} connected. Scan and Ask will now use it.`, 'success');
     } catch {
       await refreshKeyStatus();
     } finally {
@@ -188,8 +221,8 @@ export async function renderSettings(view) {
       keyInput.value = '';
       renderKeyStatus(status);
       toast(status.source === 'server'
-        ? 'Browser key removed. The Vercel server key is still active.'
-        : 'API key disconnected from this browser.', 'success');
+        ? `Browser key removed. The Vercel ${providerName(status.provider)} key is still active.`
+        : 'AI API key disconnected from this browser.', 'success');
     } catch {
       await refreshKeyStatus();
     }
