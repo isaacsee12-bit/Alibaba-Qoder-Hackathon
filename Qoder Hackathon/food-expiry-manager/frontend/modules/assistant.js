@@ -11,6 +11,10 @@ const PRESETS = [
 let recognition = null;
 let listening = false;
 
+function providerName(provider) {
+  return provider === 'gemini' ? 'Gemini' : 'OpenAI';
+}
+
 function speak(text) {
   if (!('speechSynthesis' in window)) {
     toast('Speech playback is not supported in this browser.', 'error');
@@ -24,9 +28,13 @@ function speak(text) {
 }
 
 function connectionLabel(status) {
-  if (status?.source === 'user') return `Connected AI · key ending ${status.suffix || '••••'}`;
-  if (status?.source === 'server') return 'Connected AI · Vercel server key';
-  return 'Built-in recommendations · connect a key in Settings for AI';
+  if (status?.source === 'user') {
+    return `${providerName(status.provider)} connected · key ending ${status.suffix || '••••'}`;
+  }
+  if (status?.source === 'server') {
+    return `${providerName(status.provider)} connected · Vercel server key`;
+  }
+  return 'Built-in recommendations · connect OpenAI or Gemini in Settings for AI';
 }
 
 export async function renderAssistant(view) {
@@ -92,9 +100,10 @@ export async function renderAssistant(view) {
       messages.insertAdjacentHTML('beforeend', `<div class="assistant-message assistant-message-bot">${esc(answer)}</div>`);
       messages.scrollTop = messages.scrollHeight;
       if (result.ai) {
+        const provider = providerName(result.provider);
         status.textContent = result.keySource === 'user'
-          ? 'Connected AI response · spoken aloud'
-          : 'Server AI response · spoken aloud';
+          ? `${provider} response · spoken aloud`
+          : `${provider} server response · spoken aloud`;
       } else if (result.warning) {
         status.textContent = `${result.warning} Built-in recommendation used instead.`;
       } else {

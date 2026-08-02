@@ -55,7 +55,7 @@ export const api = {
 
   // AI connection, assistant, and vision scan
   getAiKeyStatus: (opts) => request('GET', '/ai-key', null, opts),
-  saveAiKey: (key, opts) => request('POST', '/ai-key', { key }, opts),
+  saveAiKey: (provider, key, opts) => request('POST', '/ai-key', { provider, key }, opts),
   testAiKey: (opts) => request('POST', '/ai-key', { action: 'test' }, opts),
   clearAiKey: (opts) => request('DELETE', '/ai-key', null, opts),
   askAssistant: (payload, opts) => request('POST', '/assistant', payload, opts),

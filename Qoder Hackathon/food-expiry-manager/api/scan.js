@@ -1,5 +1,5 @@
 const { resolveApiKey } = require('../lib/secure-ai-key');
-const { friendlyOpenAIError, scanFoodImage } = require('../lib/openai-food');
+const { friendlyAiError, providerLabel, scanFoodImage } = require('../lib/ai-provider');
 
 function json(res, status, body) {
   res.statusCode = status;
@@ -26,25 +26,32 @@ module.exports = async function handler(req, res) {
   }
 
   const resolved = resolveApiKey(req);
-  if (!resolved.key) {
+  if (!resolved.key || !resolved.provider) {
     return json(res, 409, {
-      error: 'Connect an OpenAI API key in Settings to use AI image scanning.',
+      error: 'Connect an OpenAI or Gemini API key in Settings to use AI image scanning.',
       code: 'AI_KEY_REQUIRED',
     });
   }
 
   try {
-    const result = await scanFoodImage(resolved.key, bodyOf(req).imageDataUrl);
+    const result = await scanFoodImage(
+      resolved.provider,
+      resolved.key,
+      bodyOf(req).imageDataUrl
+    );
     return json(res, 200, {
       ...result,
       source: 'ai',
       ai: true,
+      provider: resolved.provider,
+      providerLabel: providerLabel(resolved.provider),
       keySource: resolved.source,
     });
   } catch (error) {
     return json(res, error.status || 502, {
-      error: friendlyOpenAIError(error),
+      error: friendlyAiError(resolved.provider, error),
       code: error.code || 'AI_SCAN_FAILED',
+      provider: resolved.provider,
     });
   }
 };

@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const COOKIE_NAME = 'freshtrack_ai_key';
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 const VERSION = 'v1';
+const PROVIDERS = new Set(['openai', 'gemini']);
 
 class AiKeyConfigError extends Error {
   constructor(message) {
@@ -11,6 +12,11 @@ class AiKeyConfigError extends Error {
     this.code = 'AI_KEY_CONFIG_MISSING';
     this.status = 503;
   }
+}
+
+function normalizeProvider(value, fallback = null) {
+  const provider = String(value || '').trim().toLowerCase();
+  return PROVIDERS.has(provider) ? provider : fallback;
 }
 
 function hasEncryptionSecret() {
@@ -90,8 +96,16 @@ function setCookieHeader(res, value) {
   res.setHeader('Set-Cookie', [...list, value]);
 }
 
-function writeUserKeyCookie(req, res, apiKey) {
+function writeUserKeyCookie(req, res, provider, apiKey) {
+  const normalizedProvider = normalizeProvider(provider);
+  if (!normalizedProvider) {
+    const error = new Error('Unsupported AI provider');
+    error.status = 400;
+    error.code = 'INVALID_AI_PROVIDER';
+    throw error;
+  }
   const token = encryptPayload({
+    provider: normalizedProvider,
     key: apiKey,
     suffix: apiKey.slice(-4),
     createdAt: new Date().toISOString(),
@@ -117,7 +131,10 @@ function readUserKey(req) {
   try {
     const payload = decryptPayload(token);
     if (!payload || typeof payload.key !== 'string' || payload.key.length < 20) return null;
+    // Cookies created before Gemini support did not include provider; they were OpenAI keys.
+    const provider = normalizeProvider(payload.provider, 'openai');
     return {
+      provider,
       key: payload.key,
       suffix: String(payload.suffix || payload.key.slice(-4)),
       createdAt: payload.createdAt || null,
@@ -127,18 +144,42 @@ function readUserKey(req) {
   }
 }
 
+function resolveServerApiKey() {
+  const credentials = {
+    openai: process.env.OPENAI_API_KEY || process.env.LLM_API_KEY || null,
+    gemini: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || null,
+  };
+  const preferred = normalizeProvider(process.env.AI_PROVIDER);
+  const order = preferred
+    ? [preferred, ...[...PROVIDERS].filter((provider) => provider !== preferred)]
+    : ['openai', 'gemini'];
+
+  for (const provider of order) {
+    if (credentials[provider]) {
+      return { provider, key: credentials[provider], source: 'server', suffix: null };
+    }
+  }
+  return { provider: null, key: null, source: 'none', suffix: null };
+}
+
 function resolveApiKey(req) {
   const user = readUserKey(req);
-  if (user) return { key: user.key, source: 'user', suffix: user.suffix };
-  const serverKey = process.env.OPENAI_API_KEY || process.env.LLM_API_KEY;
-  if (serverKey) return { key: serverKey, source: 'server', suffix: null };
-  return { key: null, source: 'none', suffix: null };
+  if (user) {
+    return {
+      provider: user.provider,
+      key: user.key,
+      source: 'user',
+      suffix: user.suffix,
+    };
+  }
+  return resolveServerApiKey();
 }
 
 function keyStatus(req) {
   const resolved = resolveApiKey(req);
   return {
     connected: Boolean(resolved.key),
+    provider: resolved.provider,
     source: resolved.source,
     suffix: resolved.source === 'user' ? resolved.suffix : null,
     canSaveBrowserKey: hasEncryptionSecret(),
@@ -173,7 +214,9 @@ module.exports = {
   clearUserKeyCookie,
   hasEncryptionSecret,
   keyStatus,
+  normalizeProvider,
   readUserKey,
   resolveApiKey,
+  resolveServerApiKey,
   writeUserKeyCookie,
 };
