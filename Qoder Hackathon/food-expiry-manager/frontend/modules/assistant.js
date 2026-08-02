@@ -23,6 +23,12 @@ function speak(text) {
   speechSynthesis.speak(utterance);
 }
 
+function connectionLabel(status) {
+  if (status?.source === 'user') return `Connected AI · key ending ${status.suffix || '••••'}`;
+  if (status?.source === 'server') return 'Connected AI · Vercel server key';
+  return 'Built-in recommendations · connect a key in Settings for AI';
+}
+
 export async function renderAssistant(view) {
   view.innerHTML = `
     <section class="assistant-hero">
@@ -35,6 +41,8 @@ export async function renderAssistant(view) {
         <p class="card-sub">Ask what to cook, what to eat first, or how to use your current inventory.</p>
       </div>
     </section>
+
+    <p id="assistant-connection" class="card-sub">Checking AI connection…</p>
 
     <div class="assistant-presets" aria-label="Suggested questions">
       ${PRESETS.map((prompt) => `<button type="button" class="assistant-preset" data-prompt="${esc(prompt)}">${esc(prompt)}</button>`).join('')}
@@ -58,8 +66,15 @@ export async function renderAssistant(view) {
   const input = view.querySelector('#assistant-input');
   const messages = view.querySelector('#assistant-messages');
   const status = view.querySelector('#assistant-status');
+  const connection = view.querySelector('#assistant-connection');
   const mic = view.querySelector('#assistant-mic');
   const send = view.querySelector('#assistant-send');
+
+  try {
+    connection.textContent = connectionLabel(await api.getAiKeyStatus({ silent: true }));
+  } catch {
+    connection.textContent = 'Could not check the AI connection. Built-in recommendations remain available.';
+  }
 
   async function submit(prompt) {
     const question = String(prompt || input.value).trim();
@@ -76,7 +91,15 @@ export async function renderAssistant(view) {
       const answer = result.answer || 'I could not prepare a recommendation.';
       messages.insertAdjacentHTML('beforeend', `<div class="assistant-message assistant-message-bot">${esc(answer)}</div>`);
       messages.scrollTop = messages.scrollHeight;
-      status.textContent = result.ai ? 'AI response · spoken aloud' : 'Built-in recommendation · spoken aloud';
+      if (result.ai) {
+        status.textContent = result.keySource === 'user'
+          ? 'Connected AI response · spoken aloud'
+          : 'Server AI response · spoken aloud';
+      } else if (result.warning) {
+        status.textContent = `${result.warning} Built-in recommendation used instead.`;
+      } else {
+        status.textContent = 'Built-in recommendation · spoken aloud';
+      }
       speak(answer);
     } catch {
       status.textContent = 'Could not reach the food assistant.';

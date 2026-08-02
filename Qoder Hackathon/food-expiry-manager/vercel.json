@@ -2,6 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     { "source": "/api/demo/reseed", "destination": "/api/demo-reseed.js" },
+    { "source": "/api/ai-key", "destination": "/api/ai-key.js" },
+    { "source": "/api/scan", "destination": "/api/scan.js" },
     { "source": "/api/assistant", "destination": "/api/assistant.js" },
     { "source": "/api/:path*", "destination": "/api/index.js" },
     { "source": "/", "destination": "/frontend/index.html" },

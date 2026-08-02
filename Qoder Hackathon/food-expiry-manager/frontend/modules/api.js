@@ -17,13 +17,18 @@ async function request(method, path, body, opts = {}) {
   }
   if (!res.ok) {
     let detail = '';
+    let code = '';
     try {
       const data = await res.json();
       detail = data.error || data.message || '';
+      code = data.code || '';
     } catch { /* non-JSON error body */ }
     const msg = detail || `Request failed (${res.status})`;
+    const error = new Error(msg);
+    error.status = res.status;
+    error.code = code;
     if (!opts.silent) api.onError(msg);
-    throw new Error(msg);
+    throw error;
   }
   if (res.status === 204) return null;
   return res.json();
@@ -48,8 +53,13 @@ export const api = {
   // insights
   getInsights: (opts) => request('GET', '/insights', null, opts),
 
-  // voice assistant
+  // AI connection, assistant, and vision scan
+  getAiKeyStatus: (opts) => request('GET', '/ai-key', null, opts),
+  saveAiKey: (key, opts) => request('POST', '/ai-key', { key }, opts),
+  testAiKey: (opts) => request('POST', '/ai-key', { action: 'test' }, opts),
+  clearAiKey: (opts) => request('DELETE', '/ai-key', null, opts),
   askAssistant: (payload, opts) => request('POST', '/assistant', payload, opts),
+  scanFoodWithAi: (imageDataUrl, opts) => request('POST', '/scan', { imageDataUrl }, opts),
 
   // reliability
   getReliabilityFlags: (opts) => request('GET', '/reliability/flags', null, opts),
