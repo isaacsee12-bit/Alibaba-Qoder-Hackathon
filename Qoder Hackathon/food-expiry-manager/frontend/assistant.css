@@ -28,10 +28,13 @@
 .assistant-orb span:nth-child(2) { height: 42px; animation-delay: -.2s; }
 .assistant-orb span:nth-child(3) { height: 29px; animation-delay: -.4s; }
 @keyframes assistant-wave { 0%,100% { transform: scaleY(.55); opacity: .75; } 50% { transform: scaleY(1); opacity: 1; } }
-.assistant-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+.assistant-presets { display: grid; grid-template-columns: repeat(3, 1fr); align-items: stretch; gap: 10px; margin-bottom: 16px; }
 .assistant-preset {
+  min-width: 0;
   min-height: 84px;
+  height: auto;
   padding: 14px;
+  overflow: visible;
   border: 1px solid rgba(29, 105, 73, .14);
   border-radius: 17px;
   color: var(--ink);
@@ -40,13 +43,30 @@
   font-size: .88rem;
   line-height: 1.35;
   text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  hyphens: none;
   cursor: pointer;
   transition: transform .16s ease, border-color .16s ease, background .16s ease;
 }
 .assistant-preset:hover { transform: translateY(-2px); border-color: #48bd7d; background: #fff; }
 .assistant-chat { padding: 0; overflow: hidden; }
-.assistant-messages { min-height: 260px; max-height: 430px; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
-.assistant-message { max-width: 84%; padding: 12px 14px; border-radius: 17px; line-height: 1.45; white-space: pre-wrap; }
+.assistant-messages { min-width: 0; min-height: 260px; max-height: 430px; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.assistant-message {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 84%;
+  height: auto;
+  padding: 12px 14px;
+  overflow: visible;
+  border-radius: 17px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  hyphens: none;
+}
 .assistant-message-bot { align-self: flex-start; background: #eef8f2; border-bottom-left-radius: 5px; }
 .assistant-message-user { align-self: flex-end; color: #fff; background: linear-gradient(145deg, #2fbd78, #14734d); border-bottom-right-radius: 5px; }
 .assistant-controls { padding: 15px; border-top: 1px solid rgba(29, 105, 73, .1); background: rgba(248,252,250,.94); }
@@ -60,6 +80,7 @@
   .assistant-orb { width: 70px; height: 70px; border-radius: 22px; }
   .assistant-presets { grid-template-columns: 1fr; }
   .assistant-preset { min-height: 58px; }
+  .assistant-message { max-width: 92%; }
   .assistant-actions { justify-content: stretch; }
   .assistant-actions .btn { flex: 1; }
 }
