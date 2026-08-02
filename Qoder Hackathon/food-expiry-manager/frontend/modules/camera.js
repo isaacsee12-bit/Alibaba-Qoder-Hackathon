@@ -1,4 +1,4 @@
-// Scan tab: photo capture / demo picker → downscale → classify → editable result card.
+// Scan tab: photo capture / demo picker → AI vision or local classifier → editable result card.
 
 import { api } from './api.js';
 import { classifyImage, warmupClassifier } from './classifier.js';
@@ -27,7 +27,6 @@ function canvasToJpeg(canvas) {
   });
 }
 
-/** Decode with an HTML image as a fallback for SVGs unsupported by createImageBitmap. */
 async function decodeWithImageElement(blob) {
   const url = URL.createObjectURL(blob);
   try {
@@ -41,7 +40,6 @@ async function decodeWithImageElement(blob) {
   }
 }
 
-/** Downscale an image blob so its longest side is ≤ MAX_DIM px. */
 async function downscale(blob) {
   let source;
   let width;
@@ -81,13 +79,33 @@ async function downscale(blob) {
   }
 }
 
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not encode image'));
+    reader.onload = () => resolve(String(reader.result));
+    reader.readAsDataURL(blob);
+  });
+}
+
 function isoInDays(days) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString();
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
+
+function scanModeText(status) {
+  if (status?.source === 'user') return `Enhanced AI vision connected · key ending ${status.suffix || '••••'}`;
+  if (status?.source === 'server') return 'Enhanced AI vision connected through the server';
+  return 'Using the private on-device scanner. Connect an API key in Settings for enhanced AI vision.';
 }
 
 export async function renderScan(view) {
+  let aiStatus = { connected: false, source: 'none' };
+  try {
+    aiStatus = await api.getAiKeyStatus({ silent: true });
+  } catch { /* local scanning still works */ }
+
   view.innerHTML = `
     <h2>Scan food</h2>
     <label class="scan-drop">
@@ -98,12 +116,13 @@ export async function renderScan(view) {
       <small>Snap your groceries and we'll identify them</small>
       <input type="file" accept="image/*" capture="environment" id="scan-input">
     </label>
+    <p class="card-sub">${esc(scanModeText(aiStatus))}</p>
 
     <h3>Or try a demo image</h3>
     <div class="demo-strip" id="demo-strip">
-      ${DEMO_IMAGES.map((d, i) => `
-        <button class="demo-thumb" data-idx="${i}" title="${esc(d.label)}" aria-label="Try ${esc(d.label)} demo image">
-          <img src="${d.file}" alt="${esc(d.label)}" loading="lazy">
+      ${DEMO_IMAGES.map((demo, index) => `
+        <button class="demo-thumb" data-idx="${index}" title="${esc(demo.label)}" aria-label="Try ${esc(demo.label)} demo image">
+          <img src="${demo.file}" alt="${esc(demo.label)}" loading="lazy">
         </button>`).join('')}
     </div>
 
@@ -141,31 +160,30 @@ export async function renderScan(view) {
   `;
 
   warmupClassifier();
-
   const stage = view.querySelector('#scan-stage');
 
-  view.querySelector('#scan-input').addEventListener('change', (e) => {
-    const file = e.target.files?.[0];
-    if (file) handleImage(file, stage);
-    e.target.value = '';
+  view.querySelector('#scan-input').addEventListener('change', (event) => {
+    const file = event.target.files?.[0];
+    if (file) handleImage(file, stage, null, aiStatus);
+    event.target.value = '';
   });
 
-  view.querySelector('#demo-strip').addEventListener('click', async (e) => {
-    const btn = e.target.closest('.demo-thumb');
-    if (!btn) return;
-    const demo = DEMO_IMAGES[Number(btn.dataset.idx)];
+  view.querySelector('#demo-strip').addEventListener('click', async (event) => {
+    const button = event.target.closest('.demo-thumb');
+    if (!button) return;
+    const demo = DEMO_IMAGES[Number(button.dataset.idx)];
     try {
-      const res = await fetch(demo.file);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      await handleImage(await res.blob(), stage, demo);
+      const response = await fetch(demo.file);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      await handleImage(await response.blob(), stage, demo, aiStatus);
     } catch {
       toast('Could not load demo image.', 'error');
     }
   });
 
-  view.querySelector('#manual-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const form = e.target;
+  view.querySelector('#manual-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.target;
     const expiry = form.querySelector('#m-expiry').value;
     const payload = {
       name: form.querySelector('#m-name').value.trim(),
@@ -185,13 +203,25 @@ export async function renderScan(view) {
   });
 }
 
-async function handleImage(blob, stage, demo = null) {
+async function localClassification(blob, progressText, progressFill) {
+  return classifyImage(blob, (progress) => {
+    if (progress.stage === 'download') {
+      progressText.textContent = `Downloading on-device model… ${progress.pct}%`;
+      progressFill.style.width = `${progress.pct}%`;
+    } else if (progress.stage === 'fallback') {
+      progressText.textContent = 'Using quick local estimate…';
+    }
+  });
+}
+
+async function handleImage(blob, stage, demo = null, aiStatus = { connected: false }) {
   const previewUrl = URL.createObjectURL(blob);
   stage.innerHTML = `
     <div class="card">
       <img class="scan-preview" src="${previewUrl}" alt="Selected food photo">
       <div class="progress-wrap" id="scan-progress">
-        <span class="spinner"></span> Identifying food…
+        <span class="spinner"></span>
+        <span id="scan-progress-text">Identifying food…</span>
         <div class="progress-bar"><div id="scan-progress-fill"></div></div>
       </div>
     </div>
@@ -208,23 +238,12 @@ async function handleImage(blob, stage, demo = null) {
     return;
   }
 
-  const progressEl = stage.querySelector('#scan-progress');
-  const fillEl = stage.querySelector('#scan-progress-fill');
-  let result = await classifyImage(small, (p) => {
-    if (p.stage === 'download' && fillEl) {
-      progressEl.firstChild.textContent = '';
-      progressEl.childNodes[1].textContent = ` Downloading model… ${p.pct}%`;
-      fillEl.style.width = `${p.pct}%`;
-    } else if (p.stage === 'fallback' && progressEl) {
-      progressEl.childNodes[1].textContent = ' Using quick estimate…';
-    }
-  });
+  const progressText = stage.querySelector('#scan-progress-text');
+  const progressFill = stage.querySelector('#scan-progress-fill');
+  let result;
 
-  // Curated demo images should always demonstrate the named food, even when the
-  // generic classifier is unavailable or returns a broad ImageNet label.
   if (demo) {
     result = {
-      ...result,
       name: demo.name,
       category: demo.category,
       shelfDays: demo.shelfDays,
@@ -232,6 +251,21 @@ async function handleImage(blob, stage, demo = null) {
       alternatives: [],
       source: 'demo',
     };
+  } else if (aiStatus.connected) {
+    try {
+      progressText.textContent = 'Analyzing with connected AI vision…';
+      progressFill.style.width = '55%';
+      const aiResult = await api.scanFoodWithAi(await blobToDataUrl(small), { silent: true });
+      result = { ...aiResult, source: 'ai' };
+      progressFill.style.width = '100%';
+    } catch (error) {
+      progressText.textContent = 'AI scan unavailable — switching to the on-device scanner…';
+      progressFill.style.width = '0%';
+      result = await localClassification(small, progressText, progressFill);
+      result.aiWarning = error.message;
+    }
+  } else {
+    result = await localClassification(small, progressText, progressFill);
   }
 
   renderResultCard(stage, previewUrl, result);
@@ -240,12 +274,14 @@ async function handleImage(blob, stage, demo = null) {
 function renderResultCard(stage, previewUrl, result) {
   const shelfDays = result.shelfDays ?? 7;
   const defaultExpiry = toDateInputValue(isoInDays(shelfDays));
-  const confPct = Math.round(result.confidence * 100);
+  const confPct = Math.round((result.confidence ?? 0.65) * 100);
   const sourceNote = result.source === 'demo'
     ? '<span class="source-note">curated demo</span>'
-    : result.source === 'mock'
-      ? '<span class="source-note">quick estimate</span>'
-      : `<span class="source-note">on-device AI${result.model ? ` · ${esc(result.model.split('/')[1] || result.model)}` : ''}</span>`;
+    : result.source === 'ai'
+      ? '<span class="source-note">connected AI vision</span>'
+      : result.source === 'mock'
+        ? '<span class="source-note">quick local estimate</span>'
+        : `<span class="source-note">on-device AI${result.model ? ` · ${esc(result.model.split('/')[1] || result.model)}` : ''}</span>`;
 
   stage.innerHTML = `
     <div class="card urgency-fresh">
@@ -257,6 +293,7 @@ function renderResultCard(stage, previewUrl, result) {
         </div>
         <div class="confidence-meter"><div style="width:${confPct}%"></div></div>
         <p class="card-sub">Confidence: ${confPct}%${result.alternatives?.length ? ` · could also be ${esc(result.alternatives.join(', '))}` : ''}</p>
+        ${result.aiWarning ? `<p class="warning-note">AI scan could not be used: ${esc(result.aiWarning)} The local scanner produced this result instead.</p>` : ''}
       </div>
       <form id="result-form" style="margin-top:12px">
         <div class="field">
@@ -271,7 +308,7 @@ function renderResultCard(stage, previewUrl, result) {
           <div class="field">
             <label for="r-expiry">Expiry date</label>
             <input id="r-expiry" type="date" value="${defaultExpiry}">
-            <p class="card-sub">Leave blank to auto-estimate</p>
+            <p class="card-sub">Estimated only. Check the actual food and packaging.</p>
           </div>
         </div>
         <div class="field-row">
@@ -289,15 +326,15 @@ function renderResultCard(stage, previewUrl, result) {
     </div>
   `;
 
-  stage.querySelector('#result-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const q = (sel) => stage.querySelector(sel);
-    const expiry = q('#r-expiry').value;
+  stage.querySelector('#result-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const query = (selector) => stage.querySelector(selector);
+    const expiry = query('#r-expiry').value;
     const payload = {
-      name: q('#r-name').value.trim(),
-      category: q('#r-category').value,
-      quantity: Number(q('#r-qty').value) || 1,
-      unit: q('#r-unit').value.trim() || 'pcs',
+      name: query('#r-name').value.trim(),
+      category: query('#r-category').value,
+      quantity: Number(query('#r-qty').value) || 1,
+      unit: query('#r-unit').value.trim() || 'pcs',
       source: result.source === 'demo' ? 'demo' : 'cv',
       confidence: result.confidence,
     };
