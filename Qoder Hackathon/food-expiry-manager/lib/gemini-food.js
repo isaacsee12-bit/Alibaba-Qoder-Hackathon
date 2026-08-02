@@ -48,6 +48,33 @@ function extractText(data) {
   return parts.map((part) => String(part?.text || '')).join('').trim();
 }
 
+function finishReason(data) {
+  return String(data?.candidates?.[0]?.finishReason || '').trim().toUpperCase();
+}
+
+function responseWasTruncated(data) {
+  return finishReason(data) === 'MAX_TOKENS';
+}
+
+function looksIncompleteAnswer(value) {
+  const answer = String(value || '').trim();
+  if (!answer) return true;
+  if (/[,:;\-–—]$/.test(answer)) return true;
+  const openParens = (answer.match(/\(/g) || []).length;
+  const closeParens = (answer.match(/\)/g) || []).length;
+  return openParens !== closeParens;
+}
+
+function withLowThinking(payload, selectedModel) {
+  const generationConfig = { ...(payload?.generationConfig || {}) };
+  if (/^gemini-3(?:\.|-)/i.test(selectedModel)) {
+    generationConfig.thinkingConfig = { thinkingLevel: 'LOW' };
+  } else if (/^gemini-2\.5-(?:flash|flash-lite)/i.test(selectedModel)) {
+    generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  }
+  return { ...payload, generationConfig };
+}
+
 function errorReason(data) {
   const details = Array.isArray(data?.error?.details) ? data.error.details : [];
   return details.find((item) => item?.reason)?.reason
@@ -175,6 +202,7 @@ function clearCachedModel(apiKey) {
 
 async function generateWithModel(apiKey, selectedModel, payload) {
   const url = `${API_BASE}/models/${encodeURIComponent(selectedModel)}:generateContent`;
+  const requestPayload = withLowThinking(payload, selectedModel);
   let lastError;
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -185,7 +213,7 @@ async function generateWithModel(apiKey, selectedModel, payload) {
           'x-goog-api-key': apiKey,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(requestPayload),
       });
       if (response.ok) return { data, model: selectedModel };
       if (!isTransientStatus(response.status) || attempt === 2) throwResponseError(response, data);
@@ -249,6 +277,9 @@ function friendlyGeminiError(error) {
   if (code === 'GEMINI_NETWORK_ERROR') {
     return 'FreshTrack could not reach Google’s Gemini API from the server. Try again after the deployment finishes.';
   }
+  if (code === 'GEMINI_OUTPUT_TRUNCATED') {
+    return 'Gemini could not finish the recommendation. FreshTrack used the built-in complete recommendation instead.';
+  }
   if (error?.status === 400) return message || 'The Gemini request was not accepted.';
   if (error?.status === 500 || error?.status === 503) {
     return 'Google Gemini is temporarily overloaded. FreshTrack retried the request, but Google did not recover.';
@@ -266,7 +297,7 @@ async function validateGeminiApiKey(apiKey) {
         parts: [{ text: 'Reply with only the word OK.' }],
       }],
       generationConfig: {
-        maxOutputTokens: 64,
+        maxOutputTokens: 128,
       },
     }
   );
@@ -288,16 +319,11 @@ function cleanItems(items) {
     .filter((item) => item.name);
 }
 
-async function askGeminiFoodAssistant(apiKey, question, items) {
-  const clean = cleanItems(items);
-  const inventoryText = clean.length
-    ? clean.map((item) => `${item.name}${item.quantity != null ? ` (${item.quantity} ${item.unit || ''})` : ''}${item.expiresAt ? `, expires ${String(item.expiresAt).slice(0, 10)}` : ''}`).join('; ')
-    : 'No inventory items available.';
-
-  const { data, model } = await requestGemini(apiKey, process.env.GEMINI_MODEL, {
+function askPayload(inventoryText, question, maxOutputTokens) {
+  return {
     systemInstruction: {
       parts: [{
-        text: 'You are FreshTrack, a concise food inventory assistant. Give practical meal and food-waste recommendations based only on the supplied inventory. Mention food-safety uncertainty and never claim an item is safe solely from its date. Keep the answer under 90 words and suitable for spoken playback.',
+        text: 'You are FreshTrack, a concise food inventory assistant. Give practical meal and food-waste recommendations based only on the supplied inventory. Mention food-safety uncertainty and never claim an item is safe solely from its date. Keep the answer under 90 words. Use complete sentences, finish the final sentence, and never stop after a comma, dash, colon, or unfinished date.',
       }],
     },
     contents: [{
@@ -307,13 +333,47 @@ async function askGeminiFoodAssistant(apiKey, question, items) {
       }],
     }],
     generationConfig: {
-      maxOutputTokens: 240,
+      maxOutputTokens,
     },
-  });
+  };
+}
 
-  const answer = extractText(data);
-  if (!answer) throw new GeminiRequestError('Gemini returned an empty answer', 502, 'EMPTY_MODEL_RESPONSE');
-  return { answer, model };
+async function askGeminiFoodAssistant(apiKey, question, items) {
+  const clean = cleanItems(items);
+  const inventoryText = clean.length
+    ? clean.map((item) => `${item.name}${item.quantity != null ? ` (${item.quantity} ${item.unit || ''})` : ''}${item.expiresAt ? `, expires ${String(item.expiresAt).slice(0, 10)}` : ''}`).join('; ')
+    : 'No inventory items available.';
+
+  const preferred = process.env.GEMINI_MODEL;
+  let response = await requestGemini(
+    apiKey,
+    preferred,
+    askPayload(inventoryText, question, 1024)
+  );
+  let answer = extractText(response.data);
+
+  if (responseWasTruncated(response.data) || looksIncompleteAnswer(answer)) {
+    response = await requestGemini(
+      apiKey,
+      preferred,
+      askPayload(inventoryText, question, 2048)
+    );
+    answer = extractText(response.data);
+  }
+
+  if (!answer) {
+    throw new GeminiRequestError('Gemini returned an empty answer', 502, 'EMPTY_MODEL_RESPONSE');
+  }
+  if (responseWasTruncated(response.data) || looksIncompleteAnswer(answer)) {
+    throw new GeminiRequestError(
+      'Gemini stopped before completing the recommendation.',
+      502,
+      'GEMINI_OUTPUT_TRUNCATED',
+      { finishReason: finishReason(response.data) || null }
+    );
+  }
+
+  return { answer, model: response.model };
 }
 
 function parseImageDataUrl(value) {
@@ -374,7 +434,7 @@ function scanSchema() {
 }
 
 function scanPayload(image, modernFormat = true) {
-  const generationConfig = { maxOutputTokens: 220 };
+  const generationConfig = { maxOutputTokens: 1024 };
   const schema = scanSchema();
   if (modernFormat) {
     generationConfig.responseFormat = {
