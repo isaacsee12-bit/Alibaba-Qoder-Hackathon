@@ -1,3 +1,17 @@
+const crypto = require('crypto');
+
+const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const REQUEST_TIMEOUT_MS = 20000;
+const MODEL_CACHE_TTL_MS = 10 * 60 * 1000;
+const MODEL_PREFERENCES = [
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-flash-latest',
+];
+const modelCache = new Map();
+
 const CATEGORIES = [
   'fruit',
   'vegetable',
@@ -11,17 +25,22 @@ const CATEGORIES = [
 ];
 
 class GeminiRequestError extends Error {
-  constructor(message, status, code) {
+  constructor(message, status, code, details = null) {
     super(message);
     this.name = 'GeminiRequestError';
     this.status = status || 502;
     this.code = code || 'GEMINI_REQUEST_FAILED';
+    this.details = details;
   }
 }
 
-function modelName(value, fallback) {
-  const model = String(value || fallback).trim();
+function modelName(value, fallback = null) {
+  const model = String(value || '').trim().replace(/^models\//, '');
   return /^[a-zA-Z0-9._-]+$/.test(model) ? model : fallback;
+}
+
+function keyFingerprint(apiKey) {
+  return crypto.createHash('sha256').update(String(apiKey), 'utf8').digest('hex').slice(0, 20);
 }
 
 function extractText(data) {
@@ -29,58 +48,218 @@ function extractText(data) {
   return parts.map((part) => String(part?.text || '')).join('').trim();
 }
 
-async function requestGemini(apiKey, model, payload) {
-  const selectedModel = modelName(model, 'gemini-2.5-flash');
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(selectedModel)}:generateContent`,
-    {
-      method: 'POST',
-      headers: {
-        'x-goog-api-key': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    }
-  );
+function errorReason(data) {
+  const details = Array.isArray(data?.error?.details) ? data.error.details : [];
+  return details.find((item) => item?.reason)?.reason
+    || data?.error?.status
+    || 'GEMINI_REQUEST_FAILED';
+}
 
-  let data;
+async function fetchJson(url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    data = await response.json();
-  } catch {
-    data = {};
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    let data = {};
+    try {
+      data = await response.json();
+    } catch {
+      data = {};
+    }
+    return { response, data };
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new GeminiRequestError(
+        'The Gemini request timed out before Google responded.',
+        504,
+        'GEMINI_TIMEOUT'
+      );
+    }
+    throw new GeminiRequestError(
+      'The server could not reach the Gemini API.',
+      502,
+      'GEMINI_NETWORK_ERROR',
+      error?.message || null
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function throwResponseError(response, data) {
+  const message = data?.error?.message || `Gemini request failed (${response.status})`;
+  throw new GeminiRequestError(message, response.status, errorReason(data), data?.error?.details || null);
+}
+
+function availableGenerationModels(data) {
+  return (Array.isArray(data?.models) ? data.models : [])
+    .filter((entry) => (entry.supportedGenerationMethods || entry.supportedActions || []).includes('generateContent'))
+    .map((entry) => modelName(entry.name || entry.baseModelId))
+    .filter(Boolean);
+}
+
+function scoreModel(name, preferred) {
+  if (preferred && name === preferred) return -1000;
+  const index = MODEL_PREFERENCES.indexOf(name);
+  if (index >= 0) return index;
+  if (/flash/i.test(name) && !/(live|tts|image|audio|preview|exp)/i.test(name)) return 100;
+  if (!/(live|tts|image|audio|embedding|preview|exp)/i.test(name)) return 200;
+  return 1000;
+}
+
+function retryDelay(attempt) {
+  return new Promise((resolve) => setTimeout(resolve, 250 * (2 ** attempt)));
+}
+
+function isTransientStatus(status) {
+  return status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+async function listGeminiModels(apiKey) {
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const { response, data } = await fetchJson(`${API_BASE}/models?pageSize=1000`, {
+        method: 'GET',
+        headers: { 'x-goog-api-key': apiKey },
+      });
+      if (response.ok) return data;
+      if (!isTransientStatus(response.status) || attempt === 2) throwResponseError(response, data);
+      lastError = new GeminiRequestError(
+        data?.error?.message || `Gemini model discovery failed (${response.status})`,
+        response.status,
+        errorReason(data),
+        data?.error?.details || null
+      );
+    } catch (error) {
+      lastError = error;
+      if (!['GEMINI_TIMEOUT', 'GEMINI_NETWORK_ERROR'].includes(error?.code) || attempt === 2) throw error;
+    }
+    await retryDelay(attempt);
+  }
+  throw lastError || new GeminiRequestError('Gemini model discovery failed.', 502, 'GEMINI_MODEL_DISCOVERY_FAILED');
+}
+
+async function discoverGeminiModel(apiKey, preferredModel = null, excluded = new Set()) {
+  const preferred = modelName(preferredModel);
+  const fingerprint = keyFingerprint(apiKey);
+  const cached = modelCache.get(fingerprint);
+  if (cached && cached.expiresAt > Date.now() && !excluded.has(cached.model)) {
+    return cached.model;
   }
 
-  if (!response.ok) {
-    const message = data?.error?.message || `Gemini request failed (${response.status})`;
-    const code = data?.error?.status || data?.error?.details?.[0]?.reason || 'GEMINI_REQUEST_FAILED';
-    throw new GeminiRequestError(message, response.status, code);
+  const data = await listGeminiModels(apiKey);
+  const models = availableGenerationModels(data)
+    .filter((name) => !excluded.has(name))
+    .sort((a, b) => scoreModel(a, preferred) - scoreModel(b, preferred));
+
+  if (!models.length) {
+    throw new GeminiRequestError(
+      'This API key has no Gemini model that supports generateContent.',
+      404,
+      'NO_COMPATIBLE_GEMINI_MODEL'
+    );
   }
-  return { data, model: selectedModel };
+
+  const selected = models[0];
+  modelCache.set(fingerprint, {
+    model: selected,
+    expiresAt: Date.now() + MODEL_CACHE_TTL_MS,
+  });
+  return selected;
+}
+
+function clearCachedModel(apiKey) {
+  modelCache.delete(keyFingerprint(apiKey));
+}
+
+async function generateWithModel(apiKey, selectedModel, payload) {
+  const url = `${API_BASE}/models/${encodeURIComponent(selectedModel)}:generateContent`;
+  let lastError;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const { response, data } = await fetchJson(url, {
+        method: 'POST',
+        headers: {
+          'x-goog-api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      if (response.ok) return { data, model: selectedModel };
+      if (!isTransientStatus(response.status) || attempt === 2) throwResponseError(response, data);
+      lastError = new GeminiRequestError(
+        data?.error?.message || `Gemini request failed (${response.status})`,
+        response.status,
+        errorReason(data),
+        data?.error?.details || null
+      );
+    } catch (error) {
+      lastError = error;
+      if (!['GEMINI_TIMEOUT', 'GEMINI_NETWORK_ERROR'].includes(error?.code) || attempt === 2) throw error;
+    }
+    await retryDelay(attempt);
+  }
+
+  throw lastError || new GeminiRequestError('Gemini request failed.', 502, 'GEMINI_REQUEST_FAILED');
+}
+
+async function requestGemini(apiKey, preferredModel, payload) {
+  let selectedModel = await discoverGeminiModel(apiKey, preferredModel);
+  try {
+    return await generateWithModel(apiKey, selectedModel, payload);
+  } catch (error) {
+    const code = String(error?.code || '').toUpperCase();
+    if (error?.status !== 404 && !code.includes('NOT_FOUND') && !code.includes('MODEL_NOT_FOUND')) {
+      throw error;
+    }
+
+    clearCachedModel(apiKey);
+    selectedModel = await discoverGeminiModel(apiKey, preferredModel, new Set([selectedModel]));
+    return generateWithModel(apiKey, selectedModel, payload);
+  }
 }
 
 function friendlyGeminiError(error) {
   const code = String(error?.code || '').toUpperCase();
   const message = String(error?.message || '');
+
   if (error?.status === 401 || code.includes('UNAUTHENTICATED')) {
     return 'The Gemini API key was rejected. Create a new key in Google AI Studio and connect it again.';
   }
   if (error?.status === 400 && (code.includes('API_KEY_INVALID') || /api key.*invalid/i.test(message))) {
     return 'The Gemini API key was rejected. Create a new key in Google AI Studio and connect it again.';
   }
-  if (error?.status === 403 || code.includes('PERMISSION_DENIED')) {
-    return 'This Gemini API key does not have permission to use the selected model.';
+  if (code.includes('FAILED_PRECONDITION') || /free tier|billing|country|region/i.test(message)) {
+    return `Gemini cannot run for this Google project yet. ${message}`.slice(0, 500);
   }
-  if (error?.status === 429 || code.includes('RESOURCE_EXHAUSTED')) {
-    return 'The Gemini key has reached a quota or rate limit. Check its limits in Google AI Studio.';
+  if (error?.status === 403 || code.includes('PERMISSION_DENIED')) {
+    return 'This Gemini API key does not have permission to use Gemini. Check the key restrictions and project access in Google AI Studio.';
+  }
+  if (error?.status === 404 || code.includes('NOT_FOUND') || code.includes('MODEL_NOT_FOUND')) {
+    return 'No compatible Gemini generateContent model is available to this API key. Check the project, region, and model access in Google AI Studio.';
+  }
+  if (error?.status === 429 || code.includes('RESOURCE_EXHAUSTED') || code.includes('QUOTA')) {
+    return 'The Gemini key has reached a quota or rate limit. Check its limits and billing in Google AI Studio.';
+  }
+  if (code === 'GEMINI_TIMEOUT') {
+    return 'Gemini did not respond in time. Try connecting again.';
+  }
+  if (code === 'GEMINI_NETWORK_ERROR') {
+    return 'FreshTrack could not reach Google’s Gemini API from the server. Try again after the deployment finishes.';
   }
   if (error?.status === 400) return message || 'The Gemini request was not accepted.';
-  return 'The Gemini service is temporarily unavailable.';
+  if (error?.status === 500 || error?.status === 503) {
+    return 'Google Gemini is temporarily overloaded. FreshTrack retried the request, but Google did not recover.';
+  }
+  return message ? `Gemini request failed: ${message}`.slice(0, 500) : 'The Gemini request failed for an unknown reason.';
 }
 
 async function validateGeminiApiKey(apiKey) {
-  const { data } = await requestGemini(
+  const { data, model } = await requestGemini(
     apiKey,
-    process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    process.env.GEMINI_MODEL,
     {
       contents: [{
         role: 'user',
@@ -93,7 +272,7 @@ async function validateGeminiApiKey(apiKey) {
   );
   const answer = extractText(data);
   if (!answer) throw new GeminiRequestError('Gemini returned an empty response', 502, 'EMPTY_MODEL_RESPONSE');
-  return true;
+  return { ok: true, model };
 }
 
 function cleanItems(items) {
@@ -115,8 +294,7 @@ async function askGeminiFoodAssistant(apiKey, question, items) {
     ? clean.map((item) => `${item.name}${item.quantity != null ? ` (${item.quantity} ${item.unit || ''})` : ''}${item.expiresAt ? `, expires ${String(item.expiresAt).slice(0, 10)}` : ''}`).join('; ')
     : 'No inventory items available.';
 
-  const selectedModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-  const { data, model } = await requestGemini(apiKey, selectedModel, {
+  const { data, model } = await requestGemini(apiKey, process.env.GEMINI_MODEL, {
     systemInstruction: {
       parts: [{
         text: 'You are FreshTrack, a concise food inventory assistant. Give practical meal and food-waste recommendations based only on the supplied inventory. Mention food-safety uncertainty and never claim an item is safe solely from its date. Keep the answer under 90 words and suitable for spoken playback.',
@@ -176,10 +354,8 @@ function normalizeScanResult(value) {
   };
 }
 
-async function scanFoodImageWithGemini(apiKey, imageDataUrl) {
-  const image = parseImageDataUrl(imageDataUrl);
-  const selectedModel = process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-  const schema = {
+function scanSchema() {
+  return {
     type: 'object',
     additionalProperties: false,
     properties: {
@@ -195,8 +371,24 @@ async function scanFoodImageWithGemini(apiKey, imageDataUrl) {
     },
     required: ['name', 'category', 'confidence', 'shelfDays', 'alternatives'],
   };
+}
 
-  const { data, model } = await requestGemini(apiKey, selectedModel, {
+function scanPayload(image, modernFormat = true) {
+  const generationConfig = { maxOutputTokens: 220 };
+  const schema = scanSchema();
+  if (modernFormat) {
+    generationConfig.responseFormat = {
+      text: {
+        mimeType: 'application/json',
+        schema,
+      },
+    };
+  } else {
+    generationConfig.responseMimeType = 'application/json';
+    generationConfig.responseJsonSchema = schema;
+  }
+
+  return {
     systemInstruction: {
       parts: [{
         text: 'Identify the main food item in the image for a food-expiry inventory app. Use a short generic food name, select the closest category, estimate confidence from 0 to 1, and give a conservative typical refrigerator shelf-life estimate in whole days. Do not infer that food is safe to eat from appearance or date alone.',
@@ -211,19 +403,29 @@ async function scanFoodImageWithGemini(apiKey, imageDataUrl) {
             data: image.data,
           },
         },
-        {
-          text: 'Identify the main food item and return the required structured result.',
-        },
+        { text: 'Identify the main food item and return the required structured result.' },
       ],
     }],
-    generationConfig: {
-      maxOutputTokens: 220,
-      responseMimeType: 'application/json',
-      responseJsonSchema: schema,
-    },
-  });
+    generationConfig,
+  };
+}
 
-  const output = extractText(data);
+async function scanFoodImageWithGemini(apiKey, imageDataUrl) {
+  const image = parseImageDataUrl(imageDataUrl);
+  const preferred = process.env.GEMINI_VISION_MODEL || process.env.GEMINI_MODEL;
+  let response;
+
+  try {
+    response = await requestGemini(apiKey, preferred, scanPayload(image, true));
+  } catch (error) {
+    const code = String(error?.code || '').toUpperCase();
+    const formatRejected = error?.status === 400
+      && (code.includes('INVALID_ARGUMENT') || /response.?format|unknown.*parameter/i.test(error?.message || ''));
+    if (!formatRejected) throw error;
+    response = await requestGemini(apiKey, preferred, scanPayload(image, false));
+  }
+
+  const output = extractText(response.data);
   if (!output) throw new GeminiRequestError('Gemini returned no scan result', 502, 'EMPTY_MODEL_RESPONSE');
 
   let parsed;
@@ -235,13 +437,14 @@ async function scanFoodImageWithGemini(apiKey, imageDataUrl) {
 
   return {
     ...normalizeScanResult(parsed),
-    model,
+    model: response.model,
   };
 }
 
 module.exports = {
   GeminiRequestError,
   askGeminiFoodAssistant,
+  discoverGeminiModel,
   friendlyGeminiError,
   scanFoodImageWithGemini,
   validateGeminiApiKey,
