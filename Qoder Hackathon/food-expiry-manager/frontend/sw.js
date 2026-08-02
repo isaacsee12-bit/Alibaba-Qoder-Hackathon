@@ -1,5 +1,5 @@
 // Service worker: cache-first for static app shell, network-first for /api/*.
-const CACHE_NAME = 'freshtrack-v8';
+const CACHE_NAME = 'freshtrack-v9';
 
 const SHELL = [
   './',
@@ -46,7 +46,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((names) => Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))))
+      .then((names) => Promise.all(names.filter((name) => name !== CACHE_NAME).map((name) => caches.delete(name))))
       .then(() => self.clients.claim())
   );
 });
@@ -57,15 +57,21 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
+  // AI key state is security-sensitive and must never be served from a stale cache.
+  if (url.origin === location.origin && url.pathname === '/api/ai-key') {
+    event.respondWith(fetch(request));
+    return;
+  }
+
   if (url.origin === location.origin && url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
           }
-          return res;
+          return response;
         })
         .catch(() => caches.match(request).then((hit) => hit || Response.error()))
     );
@@ -76,12 +82,12 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.match(request).then((hit) => {
         if (hit) return hit;
-        return fetch(request).then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
           }
-          return res;
+          return response;
         });
       })
     );
