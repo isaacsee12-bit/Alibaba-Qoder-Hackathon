@@ -3,12 +3,10 @@ const CATEGORIES = [
   'vegetable',
   'dairy',
   'meat',
-  'seafood',
   'grain',
-  'bakery',
+  'seafood',
+  'snack',
   'beverage',
-  'condiment',
-  'prepared',
   'other',
 ];
 
