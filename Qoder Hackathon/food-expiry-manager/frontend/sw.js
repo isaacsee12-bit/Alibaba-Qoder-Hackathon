@@ -1,5 +1,5 @@
 // Service worker: cache-first for static app shell, network-first for /api/*.
-const CACHE_NAME = 'freshtrack-v10';
+const CACHE_NAME = 'freshtrack-v11';
 
 const SHELL = [
   './',
@@ -58,7 +58,10 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // AI key state is security-sensitive and must never be served from a stale cache.
-  if (url.origin === location.origin && url.pathname === '/api/ai-key') {
+  if (
+    url.origin === location.origin
+    && (url.pathname === '/api/ai-key' || url.pathname === '/api/ai-status')
+  ) {
     event.respondWith(fetch(request));
     return;
   }
