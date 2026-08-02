@@ -87,7 +87,7 @@ async function validateGeminiApiKey(apiKey) {
         parts: [{ text: 'Reply with only the word OK.' }],
       }],
       generationConfig: {
-        maxOutputTokens: 8,
+        maxOutputTokens: 64,
       },
     }
   );
