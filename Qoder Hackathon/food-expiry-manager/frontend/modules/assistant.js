@@ -1,12 +1,13 @@
 import { api } from './api.js';
 import { toast } from '../app.js';
-import { esc } from './util.js';
+import { esc, daysUntil } from './util.js';
 
 const PRESETS = [
-  'What should I cook today using food that expires soon?',
   'Suggest a healthy meal using what I already have.',
-  'Which food should I eat first to reduce waste?',
 ];
+
+const CHAT_STORAGE_KEY = 'fem.assistantChat';
+const RECIPE_STORAGE_KEY = 'fem.generatedRecipe';
 
 let recognition = null;
 let listening = false;
@@ -37,6 +38,45 @@ function connectionLabel(status) {
   return 'Built-in recommendations · connect OpenAI or Gemini in Settings for AI';
 }
 
+/** Persist current chat messages to localStorage. */
+function saveChat(messagesEl) {
+  const messages = [];
+  messagesEl.querySelectorAll('.assistant-message').forEach((el) => {
+    const role = el.classList.contains('assistant-message-user') ? 'user' : 'bot';
+    messages.push({ role, text: el.textContent });
+  });
+  try {
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
+  } catch { /* storage full or unavailable */ }
+}
+
+/** Restore chat messages from localStorage. Returns true if history was loaded. */
+function loadChat(messagesEl) {
+  try {
+    const stored = localStorage.getItem(CHAT_STORAGE_KEY);
+    if (!stored) return false;
+    const messages = JSON.parse(stored);
+    if (!Array.isArray(messages) || messages.length === 0) return false;
+    messagesEl.innerHTML = messages.map((m) =>
+      `<div class="assistant-message assistant-message-${m.role}">${esc(m.text)}</div>`
+    ).join('');
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Extract a plausible recipe title from the first non-empty line of AI output. */
+function extractRecipeTitle(text) {
+  const lines = text.split('\n').filter(l => l.trim());
+  for (const line of lines) {
+    const clean = line.replace(/^[*#\s]+/, '').trim();
+    if (clean && clean.length < 100) return clean;
+  }
+  return 'Generated Recipe';
+}
+
 export async function renderAssistant(view) {
   view.innerHTML = `
     <section class="assistant-hero">
@@ -54,6 +94,9 @@ export async function renderAssistant(view) {
 
     <div class="assistant-presets" aria-label="Suggested questions">
       ${PRESETS.map((prompt) => `<button type="button" class="assistant-preset" data-prompt="${esc(prompt)}">${esc(prompt)}</button>`).join('')}
+      <button type="button" class="assistant-preset assistant-preset-generate" id="btn-generate-recipe">
+        <span class="generate-icon">🍳</span> Generate Recipe
+      </button>
     </div>
 
     <section class="card assistant-chat" aria-label="Food assistant conversation">
@@ -77,6 +120,13 @@ export async function renderAssistant(view) {
   const connection = view.querySelector('#assistant-connection');
   const mic = view.querySelector('#assistant-mic');
   const send = view.querySelector('#assistant-send');
+  const generateBtn = view.querySelector('#btn-generate-recipe');
+
+  // Restore chat history from previous session
+  const hasHistory = loadChat(messages);
+  if (hasHistory) {
+    status.textContent = 'Chat history restored.';
+  }
 
   try {
     connection.textContent = connectionLabel(await api.getAiKeyStatus({ silent: true }));
@@ -90,8 +140,10 @@ export async function renderAssistant(view) {
     input.value = '';
     messages.insertAdjacentHTML('beforeend', `<div class="assistant-message assistant-message-user">${esc(question)}</div>`);
     messages.scrollTop = messages.scrollHeight;
+    saveChat(messages);
     send.disabled = true;
     mic.disabled = true;
+    generateBtn.disabled = true;
     status.textContent = 'Checking your inventory and preparing a recommendation…';
     try {
       const inventory = await api.getItems('active', { silent: true });
@@ -99,6 +151,7 @@ export async function renderAssistant(view) {
       const answer = result.answer || 'I could not prepare a recommendation.';
       messages.insertAdjacentHTML('beforeend', `<div class="assistant-message assistant-message-bot">${esc(answer)}</div>`);
       messages.scrollTop = messages.scrollHeight;
+      saveChat(messages);
       if (result.ai) {
         const provider = providerName(result.provider);
         status.textContent = result.keySource === 'user'
@@ -115,12 +168,99 @@ export async function renderAssistant(view) {
     } finally {
       send.disabled = false;
       mic.disabled = false;
+      generateBtn.disabled = false;
     }
   }
 
-  view.querySelectorAll('.assistant-preset').forEach((button) => {
+  async function generateRecipe() {
+    // Show user intent in chat
+    messages.insertAdjacentHTML('beforeend', `<div class="assistant-message assistant-message-user">🍳 Generate a recipe using my available ingredients</div>`);
+    messages.scrollTop = messages.scrollHeight;
+    saveChat(messages);
+    send.disabled = true;
+    mic.disabled = true;
+    generateBtn.disabled = true;
+    status.textContent = 'Checking your inventory and preparing a recipe…';
+
+    try {
+      const data = await api.getItems('active', { silent: true });
+      const items = data.items || [];
+
+      if (items.length === 0) {
+        const msg = 'Your inventory is empty. Add some food items first, then I can generate a recipe for you!';
+        messages.insertAdjacentHTML('beforeend', `<div class="assistant-message assistant-message-bot">${msg}</div>`);
+        messages.scrollTop = messages.scrollHeight;
+        saveChat(messages);
+        status.textContent = 'No inventory items found.';
+        return;
+      }
+
+      // Filter out expired items, sort by closest expiry first
+      const usable = items
+        .filter((item) => {
+          if (!item.expiresAt) return true;
+          const d = daysUntil(item.expiresAt);
+          return d !== null && d >= 0;
+        })
+        .sort((a, b) => {
+          const da = a.expiresAt ? new Date(a.expiresAt).getTime() : Infinity;
+          const db = b.expiresAt ? new Date(b.expiresAt).getTime() : Infinity;
+          return da - db;
+        });
+
+      const itemList = usable.map((item) => {
+        const expiry = item.expiresAt
+          ? ` (expires in ${daysUntil(item.expiresAt)} days)`
+          : '';
+        return `${item.name}${expiry}`;
+      });
+
+      const prompt = `Generate a detailed recipe using some of the following ingredients that I have in my pantry. Prioritize the ingredients that are closest to their expiry date. Do NOT use any expired ingredients. Provide the recipe title, list of ingredients with quantities, and step-by-step cooking instructions. Available ingredients: ${itemList.join(', ')}`;
+
+      const result = await api.askAssistant({ question: prompt, items: usable });
+      const answer = result.answer || 'I could not prepare a recipe. Please try again.';
+
+      messages.insertAdjacentHTML('beforeend', `<div class="assistant-message assistant-message-bot">${esc(answer)}</div>`);
+      messages.scrollTop = messages.scrollHeight;
+      saveChat(messages);
+
+      // Store recipe in localStorage for the "View Recipe" feature on Alerts page
+      const recipe = {
+        title: extractRecipeTitle(answer),
+        fullText: answer,
+        usesItems: usable.slice(0, 10).map((i) => i.name),
+        timestamp: new Date().toISOString(),
+        ai: result.ai,
+        provider: result.provider,
+      };
+      try {
+        localStorage.setItem(RECIPE_STORAGE_KEY, JSON.stringify(recipe));
+      } catch { /* storage unavailable */ }
+
+      if (result.ai) {
+        const provider = providerName(result.provider);
+        status.textContent = result.keySource === 'user'
+          ? `${provider} recipe generated · spoken aloud`
+          : `${provider} server recipe · spoken aloud`;
+      } else if (result.warning) {
+        status.textContent = `${result.warning} Built-in recipe used instead.`;
+      } else {
+        status.textContent = 'Built-in recipe · spoken aloud';
+      }
+      speak(answer);
+    } catch {
+      status.textContent = 'Could not generate a recipe.';
+    } finally {
+      send.disabled = false;
+      mic.disabled = false;
+      generateBtn.disabled = false;
+    }
+  }
+
+  view.querySelectorAll('.assistant-preset[data-prompt]').forEach((button) => {
     button.addEventListener('click', () => submit(button.dataset.prompt));
   });
+  generateBtn.addEventListener('click', generateRecipe);
   send.addEventListener('click', () => submit());
   input.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {

@@ -219,6 +219,41 @@ app.post('/api/demo/reseed', wrap((req, res) => {
   res.json({ seeded: seed.reseed() });
 }));
 
+// ---------- assistant ----------
+app.post('/api/assistant', wrap(async (req, res) => {
+  const body = req.body || {};
+  const question = String(body.question || '').trim().slice(0, 600);
+  if (!question) throw new HttpError(400, 'question is required');
+
+  // Use the live inventory: exclude expired items, prioritize soonest expiry.
+  const usable = inventory.list('active')
+    .filter((item) => {
+      if (!item.expiresAt) return true;
+      const d = daysUntil(item.expiresAt);
+      return d !== null && d >= 0;
+    })
+    .sort((a, b) => {
+      const da = a.expiresAt ? new Date(a.expiresAt).getTime() : Infinity;
+      const db = b.expiresAt ? new Date(b.expiresAt).getTime() : Infinity;
+      return da - db;
+    });
+
+  // LLM path (OpenAI/Gemini when a key is configured).
+  const llm = await llmClient.askAssistant(question, usable);
+  if (llm) {
+    return res.json({ answer: llm.answer, ai: true, provider: llm.provider, keySource: 'server' });
+  }
+
+  // No key (or LLM failure) → deterministic rule-based fallback, never an error.
+  return res.json({
+    answer: llmClient.fallbackAnswer(question, usable),
+    ai: false,
+    provider: null,
+    keySource: 'none',
+    ...(llmClient.isEnabled() ? { warning: 'The AI service did not respond. Built-in recipe used instead.' } : {}),
+  });
+}));
+
 // ---------- errors ----------
 app.use('/api', (req, res, next) => next(new HttpError(404, 'not found')));
 

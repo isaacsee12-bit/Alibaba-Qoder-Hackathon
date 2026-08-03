@@ -20,12 +20,13 @@ export function daysUntil(isoDate) {
   return Math.round((startOfTarget - startOfToday) / 86400000);
 }
 
-/** Bucket an item into 'expired' | 'soon' | 'fresh' by its expiresAt. */
+/** Bucket an item into 'expired' | 'soon' | 'fresh' by its expiresAt.
+ * 'soon' covers the next 5 days (shared with the Inventory page filter tabs). */
 export function urgencyOf(item) {
   const d = daysUntil(item.expiresAt);
   if (d === null) return 'fresh';
   if (d < 0) return 'expired';
-  if (d <= 3) return 'soon';
+  if (d <= 5) return 'soon';
   return 'fresh';
 }
 

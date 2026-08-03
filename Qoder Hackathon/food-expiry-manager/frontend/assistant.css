@@ -28,7 +28,7 @@
 .assistant-orb span:nth-child(2) { height: 42px; animation-delay: -.2s; }
 .assistant-orb span:nth-child(3) { height: 29px; animation-delay: -.4s; }
 @keyframes assistant-wave { 0%,100% { transform: scaleY(.55); opacity: .75; } 50% { transform: scaleY(1); opacity: 1; } }
-.assistant-presets { display: grid; grid-template-columns: repeat(3, 1fr); align-items: stretch; gap: 10px; margin-bottom: 16px; }
+.assistant-presets { display: grid; grid-template-columns: repeat(2, 1fr); align-items: stretch; gap: 10px; margin-bottom: 16px; }
 .assistant-preset {
   min-width: 0;
   min-height: 84px;
@@ -51,6 +51,23 @@
   transition: transform .16s ease, border-color .16s ease, background .16s ease;
 }
 .assistant-preset:hover { transform: translateY(-2px); border-color: #48bd7d; background: #fff; }
+.assistant-preset-generate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-color: #2fbd78;
+  background: linear-gradient(135deg, rgba(225, 250, 236, .9), rgba(226, 242, 255, .85));
+  font-weight: 700;
+  font-size: 1rem;
+  color: #116e4a;
+}
+.assistant-preset-generate:hover {
+  border-color: #1a8a54;
+  background: linear-gradient(135deg, #d4f5e0, #d4e9ff);
+}
+.generate-icon { font-size: 1.6rem; }
 .assistant-chat { padding: 0; overflow: hidden; }
 .assistant-messages { min-width: 0; min-height: 260px; max-height: 430px; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
 .assistant-message {
@@ -79,6 +96,7 @@
   .assistant-hero { grid-template-columns: 1fr; }
   .assistant-orb { width: 70px; height: 70px; border-radius: 22px; }
   .assistant-presets { grid-template-columns: 1fr; }
+  .assistant-preset-generate { grid-column: 1; }
   .assistant-preset { min-height: 58px; }
   .assistant-message { max-width: 92%; }
   .assistant-actions { justify-content: stretch; }

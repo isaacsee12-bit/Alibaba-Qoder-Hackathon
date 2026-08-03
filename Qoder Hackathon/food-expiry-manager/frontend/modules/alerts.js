@@ -1,4 +1,5 @@
-// Alerts tab: expired items, expiring-soon items + recipe matches, reliability flags.
+// Alerts tab: expiry alerts (expired, expiring soon, reliability flags) and recipe alerts,
+// with filter tabs, most-recent-first ordering and favourite recipes.
 
 import { api } from './api.js';
 import { toast, refreshAlertBadge } from '../app.js';
@@ -11,15 +12,91 @@ const FLAG_LABELS = {
   expired: { text: 'Expired', cls: 'danger' },
 };
 
-export async function renderAlerts(view) {
-  view.innerHTML = `
-    <h2>Alerts</h2>
-    <div id="alerts-body"><div class="empty-state"><span class="spinner"></span></div></div>
-  `;
-  await load(view);
+const TABS = [
+  { key: 'expiry', label: 'Food Expiry' },
+  { key: 'recipe', label: 'Recipe' },
+];
+
+const FAV_STORAGE_KEY = 'fem.favRecipes';
+const SEEN_STORAGE_KEY = 'fem.recipeFirstSeen';
+
+// ---------- favourites & first-seen persistence (localStorage) ----------
+
+function loadFavs() {
+  try { return JSON.parse(localStorage.getItem(FAV_STORAGE_KEY) || '[]'); } catch { return []; }
+}
+function saveFavs(favs) {
+  try { localStorage.setItem(FAV_STORAGE_KEY, JSON.stringify(favs)); } catch { /* storage unavailable */ }
+}
+function isFav(title) { return loadFavs().includes(title); }
+function toggleFav(title) {
+  const favs = loadFavs();
+  const idx = favs.indexOf(title);
+  if (idx === -1) favs.push(title);
+  else favs.splice(idx, 1);
+  saveFavs(favs);
 }
 
-async function load(view) {
+function loadSeen() {
+  try { return JSON.parse(localStorage.getItem(SEEN_STORAGE_KEY) || '{}'); } catch { return {}; }
+}
+function saveSeen(seen) {
+  try { localStorage.setItem(SEEN_STORAGE_KEY, JSON.stringify(seen)); } catch { /* storage unavailable */ }
+}
+
+// ---------- sorting ----------
+
+/** Most recently added/created first; entries without a timestamp go last. */
+function byTimestampDesc(a, b) {
+  const ta = a.addedAt || a.createdAt || '';
+  const tb = b.addedAt || b.createdAt || '';
+  if (!ta && !tb) return 0;
+  if (!ta) return 1;
+  if (!tb) return -1;
+  return new Date(tb) - new Date(ta);
+}
+
+/** Recipes sorted: favourites first, then most recently seen first. */
+function sortedRecipes(recipes) {
+  const seen = loadSeen();
+  const now = new Date().toISOString();
+  let changed = false;
+  const stamped = recipes.map((r) => {
+    if (!seen[r.title]) { seen[r.title] = now; changed = true; }
+    return { recipe: r, seenAt: seen[r.title], fav: isFav(r.title) };
+  });
+  if (changed) saveSeen(seen);
+  return stamped.sort((a, b) => {
+    if (a.fav !== b.fav) return a.fav ? -1 : 1;
+    return new Date(b.seenAt) - new Date(a.seenAt);
+  });
+}
+
+// ---------- page ----------
+
+export async function renderAlerts(view) {
+  const state = { tab: 'expiry', data: null };
+
+  view.innerHTML = `
+    <h2>Alerts</h2>
+    <div class="alerts-tabs" role="group" aria-label="Filter alerts">
+      ${TABS.map((t) => `<button type="button" class="alerts-tab${t.key === state.tab ? ' active' : ''}" data-tab="${t.key}">${t.label}</button>`).join('')}
+    </div>
+    <div id="alerts-body"><div class="empty-state"><span class="spinner"></span></div></div>
+  `;
+
+  view.querySelectorAll('.alerts-tab').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.tab = button.dataset.tab;
+      view.querySelectorAll('.alerts-tab').forEach((b) => b.classList.toggle('active', b === button));
+      render(view, state);
+    });
+  });
+
+  await load(view, state);
+}
+
+async function load(view, state) {
   const body = view.querySelector('#alerts-body');
   let alerts = { expired: [], expiringSoon: [] };
   let recipes = [];
@@ -43,10 +120,26 @@ async function load(view) {
     return;
   }
 
-  const expired = alerts.expired || [];
-  const soon = alerts.expiringSoon || [];
+  state.data = { alerts, recipes, flags };
+  render(view, state);
+}
 
-  if (expired.length === 0 && soon.length === 0 && flags.length === 0) {
+function render(view, state) {
+  const body = view.querySelector('#alerts-body');
+  if (!state.data) return;
+
+  if (state.tab === 'recipe') renderRecipes(body, state.data.recipes);
+  else renderExpiry(body, state.data.alerts, state.data.flags);
+
+  body.onclick = (e) => onClick(e, view, state);
+}
+
+function renderExpiry(body, alerts, flags) {
+  const expired = (alerts.expired || []).slice().sort(byTimestampDesc);
+  const soon = (alerts.expiringSoon || []).slice().sort(byTimestampDesc);
+  const flagList = (flags || []).slice().sort(byTimestampDesc);
+
+  if (expired.length === 0 && soon.length === 0 && flagList.length === 0) {
     body.innerHTML = `<div class="empty-state"><span class="emoji">🎉</span>All clear — nothing expiring and no flags!</div>`;
     return;
   }
@@ -75,20 +168,36 @@ async function load(view) {
         <p class="card-sub">Use it up soon — recipe ideas below.</p>
       </div>`).join('')}
 
-    ${soon.length && recipes.length ? `<h3>🍳 Recipe ideas</h3>` : ''}
-    ${recipes.map((r) => `
-      <div class="card recipe-card">
-        <p class="card-title">${esc(r.title)}</p>
-        ${r.usesItems?.length ? `<p class="card-sub">Uses: ${r.usesItems.map((n) => `<span class="chip">${esc(typeof n === 'string' ? n : n.name)}</span>`).join(' ')}</p>` : ''}
-        <ul>${(r.ingredients || []).map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
-        <p class="muted">${esc(r.instructions || '')}</p>
-      </div>`).join('')}
-
-    ${flags.length ? `<h3>🛡 Reliability flags (${flags.length})</h3>` : ''}
-    ${flags.map((f) => flagCard(f)).join('')}
+    ${flagList.length ? `<h3>🛡 Reliability flags (${flagList.length})</h3>` : ''}
+    ${flagList.map((f) => flagCard(f)).join('')}
   `;
+}
 
-  body.onclick = (e) => onClick(e, view);
+function renderRecipes(body, recipes) {
+  if (!recipes.length) {
+    body.innerHTML = `<div class="empty-state"><span class="emoji">🍳</span>No recipe ideas right now.<br>Items expiring soon unlock recipe suggestions.</div>`;
+    return;
+  }
+
+  const sorted = sortedRecipes(recipes);
+  body.innerHTML = `
+    <h3>🍳 Recipe ideas</h3>
+    ${sorted.map(({ recipe, fav }) => recipeCard(recipe, fav)).join('')}
+  `;
+}
+
+function recipeCard(r, fav) {
+  return `
+    <div class="card recipe-card${fav ? ' fav' : ''}">
+      <div class="section-head">
+        <p class="card-title">${esc(r.title)}</p>
+        <button type="button" class="btn btn-sm fav-toggle${fav ? ' faved' : ''}" data-fav="${esc(r.title)}" aria-pressed="${fav}">${fav ? '★ Favourited' : '☆ Favourite'}</button>
+      </div>
+      ${r.usesItems?.length ? `<p class="card-sub">Uses: ${r.usesItems.map((n) => `<span class="chip">${esc(typeof n === 'string' ? n : n.name)}</span>`).join(' ')}</p>` : ''}
+      <ul>${(r.ingredients || []).map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
+      <p class="muted">${esc(r.instructions || '')}</p>
+    </div>
+  `;
 }
 
 function flagCard(flag) {
@@ -119,9 +228,15 @@ function extractSuggestion(detail = '') {
   return null;
 }
 
-async function onClick(e, view) {
+async function onClick(e, view, state) {
   const btn = e.target.closest('button');
   if (!btn) return;
+
+  if (btn.dataset.fav !== undefined) {
+    toggleFav(btn.dataset.fav);
+    render(view, state);
+    return;
+  }
 
   try {
     if (btn.dataset.discard || btn.dataset.flagDiscard) {
@@ -143,7 +258,7 @@ async function onClick(e, view) {
     } else {
       return;
     }
-    await load(view);
+    await load(view, state);
     refreshAlertBadge();
   } catch {
     btn.disabled = false;
