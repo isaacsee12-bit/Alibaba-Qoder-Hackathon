@@ -303,6 +303,61 @@ body {
   gap: 10px;
 }
 
+/* ---------- Inventory search & filters ---------- */
+.inv-search {
+  width: 100%;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.inv-search:focus {
+  outline: 2px solid var(--green-500);
+  outline-offset: 0;
+  border-color: var(--green-500);
+}
+
+.inv-filters,
+.alerts-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 16px;
+}
+
+.inv-filter,
+.alerts-tab {
+  appearance: none;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.inv-filter:hover,
+.alerts-tab:hover {
+  border-color: var(--green-500);
+  color: var(--green-700);
+}
+
+.inv-filter.active,
+.alerts-tab.active {
+  background: var(--green-600);
+  border-color: var(--green-600);
+  color: #fff;
+}
+
 /* ---------- Scan tab ---------- */
 .scan-drop {
   display: flex;
@@ -464,6 +519,16 @@ body {
   margin: 6px 0;
   padding-left: 20px;
   font-size: 0.85rem;
+}
+
+.recipe-card.fav {
+  border-color: var(--amber-600) !important;
+}
+
+.fav-toggle.faved {
+  background: var(--amber-100);
+  border-color: var(--amber-600);
+  color: var(--amber-600);
 }
 
 /* ---------- Empty state ---------- */

@@ -1,4 +1,5 @@
-// Inventory tab: active items grouped by urgency with per-item actions.
+// Inventory tab: searchable, filterable list of active items grouped by urgency.
+// Search and filter state are applied client-side so the list updates without a refresh.
 
 import { api } from './api.js';
 import { toast, refreshAlertBadge } from '../app.js';
@@ -10,38 +11,89 @@ const GROUPS = [
   { key: 'fresh', title: 'Fresh', emoji: '🥬' },
 ];
 
+const FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'expired', label: 'Expired' },
+  { key: 'soon', label: 'Expiring Soon' },
+  { key: 'fresh', label: 'Fresh' },
+];
+
+// Last fetched items; search/filter render from this without re-fetching.
+let itemsCache = [];
+
 export async function renderInventory(view) {
+  const state = { filter: 'all', query: '' };
+
   view.innerHTML = `
     <div class="section-head">
       <h2>Inventory</h2>
       <button class="btn btn-sm" id="inv-refresh">↻ Refresh</button>
     </div>
+    <input type="search" id="inv-search" class="inv-search" placeholder="Search items by name…" aria-label="Search inventory">
+    <div class="inv-filters" role="group" aria-label="Filter inventory">
+      ${FILTERS.map((f) => `<button type="button" class="inv-filter${f.key === 'all' ? ' active' : ''}" data-filter="${f.key}">${f.label}</button>`).join('')}
+    </div>
     <div id="inv-list"><div class="empty-state"><span class="spinner"></span></div></div>
   `;
-  view.querySelector('#inv-refresh').addEventListener('click', () => loadList(view));
-  await loadList(view);
+
+  view.querySelector('#inv-refresh').addEventListener('click', () => loadList(view, state));
+
+  const searchInput = view.querySelector('#inv-search');
+  searchInput.addEventListener('input', () => {
+    state.query = searchInput.value;
+    renderList(view, state);
+  });
+
+  const filterButtons = view.querySelectorAll('.inv-filter');
+  filterButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      state.filter = button.dataset.filter;
+      filterButtons.forEach((b) => b.classList.toggle('active', b === button));
+      renderList(view, state);
+    });
+  });
+
+  await loadList(view, state);
 }
 
-async function loadList(view) {
+async function loadList(view, state) {
   const listEl = view.querySelector('#inv-list');
-  let items;
   try {
     const data = await api.getItems('active');
-    items = data.items || [];
+    itemsCache = data.items || [];
   } catch {
     listEl.innerHTML = `<div class="empty-state"><span class="emoji">📡</span>Couldn't load your inventory.<br>Check that the server is running, then refresh.</div>`;
     return;
   }
+  renderList(view, state);
+}
+
+/** Render the cached items through the active search query + filter tab. */
+function renderList(view, state) {
+  const listEl = view.querySelector('#inv-list');
+  const items = itemsCache;
 
   if (items.length === 0) {
     listEl.innerHTML = `<div class="empty-state"><span class="emoji">🧺</span>Your inventory is empty.<br>Scan or add some food from the Scan tab!</div>`;
     return;
   }
 
+  // Combine the case-insensitive name search with the selected filter.
+  const q = state.query.trim().toLowerCase();
+  const visible = items.filter((item) => {
+    if (q && !item.name.toLowerCase().includes(q)) return false;
+    return state.filter === 'all' || urgencyOf(item) === state.filter;
+  });
+
   const grouped = { expired: [], soon: [], fresh: [] };
-  for (const item of items) grouped[urgencyOf(item)].push(item);
+  for (const item of visible) grouped[urgencyOf(item)].push(item);
   for (const g of Object.values(grouped)) {
     g.sort((a, b) => new Date(a.expiresAt || '9999') - new Date(b.expiresAt || '9999'));
+  }
+
+  if (visible.length === 0) {
+    listEl.innerHTML = `<div class="empty-state"><span class="emoji">🔍</span>No items match your search or filter.</div>`;
+    return;
   }
 
   listEl.innerHTML = GROUPS.filter((g) => grouped[g.key].length > 0)
@@ -50,7 +102,7 @@ async function loadList(view) {
       ${grouped[g.key].map((item) => itemCard(item)).join('')}
     `).join('');
 
-  listEl.onclick = (e) => onListClick(e, view);
+  listEl.onclick = (e) => onListClick(e, view, state);
 }
 
 function itemCard(item) {
@@ -77,7 +129,7 @@ function itemCard(item) {
   `;
 }
 
-async function onListClick(e, view) {
+async function onListClick(e, view, state) {
   const btn = e.target.closest('button[data-action]');
   if (!btn) return;
   const card = btn.closest('.card[data-id]');
@@ -101,7 +153,7 @@ async function onListClick(e, view) {
       await api.deleteItem(id);
       toast('Item deleted.', 'success');
     }
-    await loadList(view);
+    await loadList(view, state);
     refreshAlertBadge();
   } catch {
     btn.disabled = false;
@@ -171,7 +223,7 @@ function toggleEditForm(card, view) {
     try {
       await api.updateItem(card.dataset.id, patch);
       toast('Item updated.', 'success');
-      await loadList(view);
+      await loadList(view, state);
       refreshAlertBadge();
     } catch { /* toast raised by api */ }
   });
