@@ -3,7 +3,7 @@
 
 import { api } from './api.js';
 import { toast, refreshAlertBadge } from '../app.js';
-import { esc, urgencyOf, daysLeftText, toDateInputValue, categoryOptions } from './util.js';
+import { esc, urgencyOf, daysLeftText, toDateInputValue, categoryOptions, showConfirmModal } from './util.js';
 
 const GROUPS = [
   { key: 'expired', title: 'Expired', emoji: '🚨' },
@@ -141,6 +141,27 @@ async function onListClick(e, view, state) {
     return;
   }
 
+  // Delete requires a confirmation modal — prevent accidental deletion.
+  if (action === 'delete') {
+    const itemName = card.querySelector('.card-title').textContent.trim();
+    showConfirmModal({
+      title: 'Delete item?',
+      message: `This will permanently delete <strong>${esc(itemName)}</strong> from your inventory.`,
+      onConfirm: async () => {
+        btn.disabled = true;
+        try {
+          await api.deleteItem(id);
+          toast('Item deleted.', 'success');
+          await loadList(view, state);
+          refreshAlertBadge();
+        } catch {
+          btn.disabled = false;
+        }
+      },
+    });
+    return;
+  }
+
   btn.disabled = true;
   try {
     if (action === 'consume') {
@@ -149,9 +170,6 @@ async function onListClick(e, view, state) {
     } else if (action === 'discard') {
       await api.discardItem(id);
       toast('Item discarded.', 'success');
-    } else if (action === 'delete') {
-      await api.deleteItem(id);
-      toast('Item deleted.', 'success');
     }
     await loadList(view, state);
     refreshAlertBadge();

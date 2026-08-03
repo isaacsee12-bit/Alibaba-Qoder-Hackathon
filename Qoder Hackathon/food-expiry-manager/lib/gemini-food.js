@@ -323,7 +323,7 @@ function askPayload(inventoryText, question, maxOutputTokens) {
   return {
     systemInstruction: {
       parts: [{
-        text: 'You are FreshTrack, a concise food inventory assistant. Give practical meal and food-waste recommendations based only on the supplied inventory. Mention food-safety uncertainty and never claim an item is safe solely from its date. Keep the answer under 90 words. Use complete sentences, finish the final sentence, and never stop after a comma, dash, colon, or unfinished date.',
+        text: 'You are FreshTrack, a concise food inventory assistant. Give practical meal and food-waste recommendations based only on the supplied inventory. For recipes, use ONLY ingredients from the inventory list and never add unlisted items. Mention food-safety uncertainty and never claim an item is safe solely from its date. Keep the answer under 90 words. Use complete sentences, finish the final sentence, and never stop after a comma, dash, colon, or unfinished date.',
       }],
     },
     contents: [{

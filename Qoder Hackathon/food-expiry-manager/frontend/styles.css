@@ -252,6 +252,53 @@ body {
   text-align: center;
 }
 
+/* ---------- Confirmation modal ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  animation: fadeIn 0.15s ease;
+}
+
+.modal-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 380px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
+
+.modal-title {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.modal-message {
+  margin: 0 0 20px;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .btn-big {
   padding: 18px;
   font-size: 1rem;
@@ -330,8 +377,16 @@ body {
   margin: 10px 0 16px;
 }
 
+.profile-goals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+
 .inv-filter,
-.alerts-tab {
+.alerts-tab,
+.goal-chip {
   appearance: none;
   font: inherit;
   font-size: 0.8rem;
@@ -346,13 +401,15 @@ body {
 }
 
 .inv-filter:hover,
-.alerts-tab:hover {
+.alerts-tab:hover,
+.goal-chip:hover {
   border-color: var(--green-500);
   color: var(--green-700);
 }
 
 .inv-filter.active,
-.alerts-tab.active {
+.alerts-tab.active,
+.goal-chip.active {
   background: var(--green-600);
   border-color: var(--green-600);
   color: #fff;
@@ -523,6 +580,14 @@ body {
 
 .recipe-card.fav {
   border-color: var(--amber-600) !important;
+}
+
+.recipe-alert-body {
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+  color: var(--ink);
+  margin-top: 8px;
+  padding: 0 4px;
 }
 
 .fav-toggle.faved {
