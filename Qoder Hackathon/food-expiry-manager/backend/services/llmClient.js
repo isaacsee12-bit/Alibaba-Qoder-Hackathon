@@ -144,6 +144,48 @@ function ingredientMatchesItem(ingredient, itemName) {
   return !!(ma && mb && ma.matchedName === mb.matchedName);
 }
 
+const NUTRITION_GOALS = ['High Protein', 'Low Sugar', 'Low Sodium', 'Low Fat'];
+
+/** Keep only known nutrition goal presets, without duplicates. */
+function cleanGoals(goals) {
+  if (!Array.isArray(goals)) return [];
+  const seen = new Set();
+  const clean = [];
+  for (const goal of goals) {
+    const g = String(goal).trim();
+    if (NUTRITION_GOALS.includes(g) && !seen.has(g)) {
+      seen.add(g);
+      clean.push(g);
+    }
+  }
+  return clean;
+}
+
+/**
+ * Deterministic nutrition-goal score for the inventory items a recipe uses.
+ * Higher is better. Uses per-100g nutrition records (protein/carbs/fat);
+ * missing records and metrics without data (sodium) stay neutral.
+ */
+function nutritionGoalScore(usesItems, goals) {
+  if (!goals.length) return 0;
+  const values = { protein: [], carbs: [], fat: [] };
+  for (const item of usesItems) {
+    const info = shelfLife.getNutrition(item.name);
+    if (!info) continue;
+    if (Number.isFinite(info.protein)) values.protein.push(info.protein);
+    if (Number.isFinite(info.carbs)) values.carbs.push(info.carbs);
+    if (Number.isFinite(info.fat)) values.fat.push(info.fat);
+  }
+  const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+  const metrics = { protein: avg(values.protein), carbs: avg(values.carbs), fat: avg(values.fat) };
+  let score = 0;
+  if (goals.includes('High Protein') && metrics.protein !== null) score += metrics.protein;
+  if (goals.includes('Low Sugar') && metrics.carbs !== null) score -= metrics.carbs;
+  if (goals.includes('Low Fat') && metrics.fat !== null) score -= metrics.fat;
+  // Low Sodium: no per-item sodium records — stays neutral here.
+  return score;
+}
+
 /**
  * Answer an open-ended assistant question with the given inventory context.
  * @returns {Promise<{answer: string, provider: string}|null>} null when disabled or on failure.
@@ -215,30 +257,62 @@ async function dietAdvice(insights) {
 
 /**
  * Deterministic rule-based answer used when no LLM key is configured (or the
- * LLM call failed): picks the cookbook recipe that uses the most soonest-
- * expiring inventory items and formats it as readable text.
+ * LLM call failed): picks the cookbook recipe that best matches the selected
+ * nutrition goals (when any) while using the soonest-expiring, non-expired
+ * inventory items, and formats it as readable text.
  */
-function fallbackAnswer(question, items) {
+function fallbackAnswer(question, items, goals = []) {
   if (!items.length) {
     return 'Your inventory is empty. Add or scan some food first, then I can suggest what to cook and what to use soon.';
   }
+  // Expired items are never usable in a recipe.
+  const usable = items.filter((item) => {
+    if (!item.expiresAt) return true;
+    const d = daysUntil(item.expiresAt);
+    return d !== null && d >= 0;
+  });
+  if (!usable.length) {
+    return 'Everything in your inventory is expired. Remove those items, add fresh food, and then I can suggest a recipe.';
+  }
+  const soonest = (m) => Math.min(...m.usesItems.map((i) => daysUntil(i.expiresAt) ?? Number.MAX_SAFE_INTEGER));
   const matched = recipes
     .map((recipe) => ({
       recipe,
-      usesItems: items.filter((item) => recipe.ingredients.some((ing) => ingredientMatchesItem(ing, item.name))),
+      usesItems: usable.filter((item) => recipe.ingredients.some((ing) => ingredientMatchesItem(ing, item.name))),
     }))
     .filter((m) => m.usesItems.length > 0)
-    .sort((a, b) => b.usesItems.length - a.usesItems.length);
+    .map((m) => ({ ...m, goalScore: nutritionGoalScore(m.usesItems, goals) }))
+    .sort((a, b) => {
+      // With goals: closest nutrition match first, then soonest-expiring
+      // items, then the recipe using the most inventory.
+      if (goals.length) {
+        if (b.goalScore !== a.goalScore) return b.goalScore - a.goalScore;
+        const byUrgency = soonest(a) - soonest(b);
+        if (byUrgency !== 0) return byUrgency;
+        return b.usesItems.length - a.usesItems.length;
+      }
+      // Without goals: prefer the recipe using the most inventory,
+      // then the soonest-expiring items.
+      if (b.usesItems.length !== a.usesItems.length) return b.usesItems.length - a.usesItems.length;
+      return soonest(a) - soonest(b);
+    });
 
   if (matched.length) {
     const { recipe, usesItems } = matched[0];
+    // Only list ingredients the user actually has — never suggest buying extras.
+    const ownedIngredients = recipe.ingredients.filter((ing) =>
+      usesItems.some((item) => ingredientMatchesItem(ing, item.name))
+    );
+    const goalNote = goals.length
+      ? `, aiming for ${goals.join(', ')}`
+      : '';
     const lines = [
-      "Here's a recipe using your soonest-expiring ingredients:",
+      `Here's a recipe using only ingredients from your inventory, starting with the soonest-expiring ones${goalNote}:`,
       '',
       recipe.title,
       '',
       'Ingredients:',
-      ...recipe.ingredients.map((i) => `• ${i}`),
+      ...ownedIngredients.map((i) => `• ${i}`),
       '',
       'Instructions:',
       recipe.instructions,
@@ -248,8 +322,8 @@ function fallbackAnswer(question, items) {
     return lines.join('\n');
   }
 
-  const names = items.slice(0, 4).map((i) => i.name).join(', ');
+  const names = usable.slice(0, 4).map((i) => i.name).join(', ');
   return `I couldn't find a matching recipe in the cookbook, but you can build a simple bowl, stir-fry, soup, or sandwich using ${names}. Start with the items expiring soonest, season simply, and confirm freshness before eating.`;
 }
 
-module.exports = { isEnabled, askAssistant, suggestRecipes, dietAdvice, fallbackAnswer };
+module.exports = { isEnabled, askAssistant, suggestRecipes, dietAdvice, fallbackAnswer, cleanGoals };

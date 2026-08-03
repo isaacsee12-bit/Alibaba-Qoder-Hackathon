@@ -1,5 +1,5 @@
 // Service worker: cache-first for static app shell, network-first for /api/*.
-const CACHE_NAME = 'freshtrack-v12';
+const CACHE_NAME = 'freshtrack-v15';
 
 const SHELL = [
   './',

@@ -6,6 +6,7 @@ import { renderAlerts } from './modules/alerts.js';
 import { renderInsights } from './modules/insights.js';
 import { renderAssistant } from './modules/assistant.js';
 import { renderSettings } from './modules/settings.js';
+import { unreadRecipeAlertCount } from './modules/recipeAlerts.js';
 
 const routes = {
   scan: renderScan,
@@ -55,17 +56,17 @@ async function navigate() {
   refreshAlertBadge();
 }
 
-/** Update the unresolved-flags badge on the Alerts tab. */
+/** Update the red badge on the Alerts tab: unresolved reliability flags + unread recipe alerts. */
 export async function refreshAlertBadge() {
   const badge = document.getElementById('alert-badge');
+  let flags = 0;
   try {
     const data = await api.getReliabilityFlags({ silent: true });
-    const count = (data.flags || []).filter((f) => !f.resolved).length;
-    badge.textContent = count > 99 ? '99+' : String(count);
-    badge.classList.toggle('hidden', count === 0);
-  } catch {
-    badge.classList.add('hidden');
-  }
+    flags = (data.flags || []).filter((f) => !f.resolved).length;
+  } catch { /* flags unknown — recipe notifications still count */ }
+  const count = flags + unreadRecipeAlertCount();
+  badge.textContent = count > 99 ? '99+' : String(count);
+  badge.classList.toggle('hidden', count === 0);
 }
 
 async function checkHealth() {

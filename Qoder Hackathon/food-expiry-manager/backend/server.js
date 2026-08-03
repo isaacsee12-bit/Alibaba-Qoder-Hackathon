@@ -246,7 +246,7 @@ app.post('/api/assistant', wrap(async (req, res) => {
 
   // No key (or LLM failure) → deterministic rule-based fallback, never an error.
   return res.json({
-    answer: llmClient.fallbackAnswer(question, usable),
+    answer: llmClient.fallbackAnswer(question, usable, llmClient.cleanGoals(body.goals)),
     ai: false,
     provider: null,
     keySource: 'none',

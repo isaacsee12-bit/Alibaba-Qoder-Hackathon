@@ -2,6 +2,7 @@
 
 import { api } from './api.js';
 import { toast, refreshAlertBadge } from '../app.js';
+import { bindProfile, profileMarkup } from './profile.js';
 
 const LEGACY_KEY_STORAGE = 'fem.llmKey';
 
@@ -51,6 +52,8 @@ export async function renderSettings(view) {
 
   view.innerHTML = `
     <h2>Settings</h2>
+
+    ${profileMarkup()}
 
     <h3>Demo mode</h3>
     <div class="card">
@@ -169,6 +172,8 @@ export async function renderSettings(view) {
   providerSelect.addEventListener('change', renderProviderInput);
   renderProviderInput();
   await refreshKeyStatus();
+
+  bindProfile(view);
 
   view.querySelector('#reseed-btn').addEventListener('click', async (event) => {
     event.target.disabled = true;

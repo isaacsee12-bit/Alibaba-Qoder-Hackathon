@@ -1,6 +1,8 @@
 import { api } from './api.js';
-import { toast } from '../app.js';
+import { toast, refreshAlertBadge } from '../app.js';
 import { esc, daysUntil } from './util.js';
+import { loadNutritionGoals } from './profile.js';
+import { addRecipeAlert } from './recipeAlerts.js';
 
 const PRESETS = [
   'Suggest a healthy meal using what I already have.',
@@ -215,16 +217,22 @@ export async function renderAssistant(view) {
         return `${item.name}${expiry}`;
       });
 
-      const prompt = `Generate a detailed recipe using some of the following ingredients that I have in my pantry. Prioritize the ingredients that are closest to their expiry date. Do NOT use any expired ingredients. Provide the recipe title, list of ingredients with quantities, and step-by-step cooking instructions. Available ingredients: ${itemList.join(', ')}`;
+      // Nutrition goals from the Profile section of the Settings page.
+      const goals = loadNutritionGoals();
+      const goalPrompt = goals.length
+        ? `Nutrition goals: ${goals.join(', ')} — tailor the recipe to satisfy these goals as much as possible with the available ingredients; if a goal cannot be fully met, get as close as possible. `
+        : '';
 
-      const result = await api.askAssistant({ question: prompt, items: usable });
+      const prompt = `Generate a detailed recipe using ONLY the ingredients listed below — this is all the food currently available in my pantry. Do NOT include or suggest any ingredient that is not in this list, so I do not need to buy anything extra. Prioritize the ingredients that are closest to their expiry date. Do NOT use any expired ingredients. ${goalPrompt}Provide the recipe title, list of ingredients with quantities, and step-by-step cooking instructions. Available ingredients: ${itemList.join(', ')}`;
+
+      const result = await api.askAssistant({ question: prompt, items: usable, goals });
       const answer = result.answer || 'I could not prepare a recipe. Please try again.';
 
       messages.insertAdjacentHTML('beforeend', `<div class="assistant-message assistant-message-bot">${esc(answer)}</div>`);
       messages.scrollTop = messages.scrollHeight;
       saveChat(messages);
 
-      // Store recipe in localStorage for the "View Recipe" feature on Alerts page
+      // Keep the latest recipe in localStorage for reference (recipe alerts store their own copy)
       const recipe = {
         title: extractRecipeTitle(answer),
         fullText: answer,
@@ -236,6 +244,10 @@ export async function renderAssistant(view) {
       try {
         localStorage.setItem(RECIPE_STORAGE_KEY, JSON.stringify(recipe));
       } catch { /* storage unavailable */ }
+
+      // Create a new Recipe alert (nav badge increments for the unread one)
+      addRecipeAlert(recipe);
+      refreshAlertBadge();
 
       if (result.ai) {
         const provider = providerName(result.provider);

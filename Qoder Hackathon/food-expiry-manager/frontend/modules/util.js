@@ -57,3 +57,35 @@ export function categoryOptions(selected) {
     (c) => `<option value="${c}" ${c === selected ? 'selected' : ''}>${c[0].toUpperCase()}${c.slice(1)}</option>`
   ).join('');
 }
+
+/** Show a confirmation modal overlay with Cancel and Delete buttons. Calls onConfirm() when the user clicks Delete. */
+export function showConfirmModal({ title, message, onConfirm }) {
+  const existing = document.getElementById('confirm-modal');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'confirm-modal';
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <h3 class="modal-title">${esc(title)}</h3>
+      <p class="modal-message">${message}</p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="modal-cancel">Cancel</button>
+        <button type="button" class="btn btn-danger" id="modal-confirm">Delete</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  overlay.querySelector('#modal-cancel').addEventListener('click', close);
+  overlay.querySelector('#modal-confirm').addEventListener('click', () => {
+    close();
+    onConfirm();
+  });
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close();
+  });
+}

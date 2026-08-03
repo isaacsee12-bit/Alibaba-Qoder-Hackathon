@@ -3,7 +3,8 @@
 
 import { api } from './api.js';
 import { toast, refreshAlertBadge } from '../app.js';
-import { esc, daysLeftText } from './util.js';
+import { esc, daysLeftText, showConfirmModal } from './util.js';
+import { loadRecipeAlerts, deleteRecipeAlert, markRecipeAlertsRead } from './recipeAlerts.js';
 
 const FLAG_LABELS = {
   low_confidence: { text: 'Low confidence', cls: 'warn' },
@@ -72,6 +73,18 @@ function sortedRecipes(recipes) {
   });
 }
 
+/** Recipe alerts: favourites pinned first, then most recently generated first. */
+function sortedRecipeAlerts(alerts) {
+  return alerts.slice().sort((a, b) => {
+    const fa = isFav(a.title);
+    const fb = isFav(b.title);
+    if (fa !== fb) return fa ? -1 : 1;
+    const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return tb - ta;
+  });
+}
+
 // ---------- page ----------
 
 export async function renderAlerts(view) {
@@ -93,6 +106,9 @@ export async function renderAlerts(view) {
     });
   });
 
+  // Visiting the Alerts page marks recipe notifications as read.
+  markRecipeAlertsRead();
+
   await load(view, state);
 }
 
@@ -101,6 +117,7 @@ async function load(view, state) {
   let alerts = { expired: [], expiringSoon: [] };
   let recipes = [];
   let flags = [];
+  let items = null;
   let reachable = true;
 
   try {
@@ -114,13 +131,18 @@ async function load(view, state) {
     const fl = await api.getReliabilityFlags({ silent: true });
     flags = (fl.flags || []).filter((f) => !f.resolved);
   } catch { /* flags optional */ }
+  try {
+    // Current inventory names — used to keep recipe tags to items really in stock.
+    const inv = await api.getItems('active', { silent: true });
+    items = (inv.items || []).map((i) => i.name);
+  } catch { /* tags fall back to the stored list */ }
 
   if (!reachable) {
     body.innerHTML = `<div class="empty-state"><span class="emoji">📡</span>Couldn't load alerts.<br>Check that the server is running.</div>`;
     return;
   }
 
-  state.data = { alerts, recipes, flags };
+  state.data = { alerts, recipes, flags, items };
   render(view, state);
 }
 
@@ -128,7 +150,7 @@ function render(view, state) {
   const body = view.querySelector('#alerts-body');
   if (!state.data) return;
 
-  if (state.tab === 'recipe') renderRecipes(body, state.data.recipes);
+  if (state.tab === 'recipe') renderRecipes(body, state.data.recipes, state.data.items);
   else renderExpiry(body, state.data.alerts, state.data.flags);
 
   body.onclick = (e) => onClick(e, view, state);
@@ -173,17 +195,31 @@ function renderExpiry(body, alerts, flags) {
   `;
 }
 
-function renderRecipes(body, recipes) {
-  if (!recipes.length) {
-    body.innerHTML = `<div class="empty-state"><span class="emoji">🍳</span>No recipe ideas right now.<br>Items expiring soon unlock recipe suggestions.</div>`;
+function renderRecipes(body, recipes, items) {
+  const alerts = loadRecipeAlerts();
+  const hasAlerts = alerts.length > 0;
+  const hasIdeas = recipes.length > 0;
+
+  if (!hasAlerts && !hasIdeas) {
+    body.innerHTML = `<div class="empty-state"><span class="emoji">🍳</span>No recipe alerts yet.<br>Generate a recipe on the Ask page, or wait for expiring items to unlock suggestions.</div>`;
     return;
   }
 
-  const sorted = sortedRecipes(recipes);
-  body.innerHTML = `
-    <h3>🍳 Recipe ideas</h3>
-    ${sorted.map(({ recipe, fav }) => recipeCard(recipe, fav)).join('')}
-  `;
+  // One consolidated list: favourites pinned, then most recent first.
+  const entries = [];
+  for (const a of sortedRecipeAlerts(alerts)) {
+    entries.push({
+      fav: isFav(a.title),
+      ts: a.createdAt ? new Date(a.createdAt).getTime() : 0,
+      html: recipeAlertCard(a, items),
+    });
+  }
+  for (const { recipe, seenAt, fav } of sortedRecipes(recipes)) {
+    entries.push({ fav, ts: new Date(seenAt).getTime(), html: recipeCard(recipe, fav) });
+  }
+  entries.sort((x, y) => (y.fav - x.fav) || (y.ts - x.ts));
+
+  body.innerHTML = `<h3>🍳 Recipes</h3>${entries.map((e) => e.html).join('')}`;
 }
 
 function recipeCard(r, fav) {
@@ -196,6 +232,45 @@ function recipeCard(r, fav) {
       ${r.usesItems?.length ? `<p class="card-sub">Uses: ${r.usesItems.map((n) => `<span class="chip">${esc(typeof n === 'string' ? n : n.name)}</span>`).join(' ')}</p>` : ''}
       <ul>${(r.ingredients || []).map((i) => `<li>${esc(i)}</li>`).join('')}</ul>
       <p class="muted">${esc(r.instructions || '')}</p>
+    </div>
+  `;
+}
+
+/** True when the recipe text mentions the item name (case-insensitive, plurals allowed). */
+function mentionsName(name, text) {
+  if (!name || !text) return false;
+  const base = String(name).trim().toLowerCase();
+  if (!base) return false;
+  const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let pattern;
+  if (base.endsWith('y')) pattern = `${escaped.slice(0, -1)}(y|ies)`;
+  else if (base.endsWith('o')) pattern = `${escaped}e?s?`;
+  else pattern = `${escaped}s?`;
+  return new RegExp(`(^|[^a-z])${pattern}(?![a-z])`).test(text.toLowerCase());
+}
+
+/** Card for one generated-recipe alert, tagged only with inventory items the recipe uses. */
+function recipeAlertCard(alert, items) {
+  const fav = isFav(alert.title);
+  const when = alert.createdAt ? new Date(alert.createdAt).toLocaleString() : '';
+  // Tags = current inventory items that the recipe text actually mentions.
+  // (Without inventory data, fall back to the list stored when it was generated.)
+  const tags = items
+    ? items.filter((name) => mentionsName(name, alert.fullText))
+    : (alert.usesItems || []);
+  return `
+    <div class="card recipe-card recipe-alert${fav ? ' fav' : ''}">
+      <div class="section-head">
+        <p class="card-title">${esc(alert.title)}</p>
+        <button type="button" class="btn btn-sm fav-toggle${fav ? ' faved' : ''}" data-fav="${esc(alert.title)}" aria-pressed="${fav}">${fav ? '★ Favourited' : '☆ Favourite'}</button>
+      </div>
+      ${when ? `<p class="card-sub">Generated ${esc(when)}</p>` : ''}
+      ${tags.length ? `<p class="card-sub">Uses: ${tags.map((n) => `<span class="chip">${esc(n)}</span>`).join(' ')}</p>` : ''}
+      ${alert.fullText ? `<div class="recipe-alert-body hidden">${esc(alert.fullText)}</div>` : ''}
+      <div class="item-actions">
+        ${alert.fullText ? `<button type="button" class="btn btn-sm" data-view-more="${esc(alert.id)}">View more</button>` : ''}
+        <button type="button" class="btn btn-sm btn-danger" data-delete-alert="${esc(alert.id)}">Delete</button>
+      </div>
     </div>
   `;
 }
@@ -235,6 +310,31 @@ async function onClick(e, view, state) {
   if (btn.dataset.fav !== undefined) {
     toggleFav(btn.dataset.fav);
     render(view, state);
+    return;
+  }
+
+  if (btn.dataset.viewMore !== undefined) {
+    const bodyEl = btn.closest('.recipe-alert')?.querySelector('.recipe-alert-body');
+    if (bodyEl) {
+      const hidden = bodyEl.classList.toggle('hidden');
+      btn.textContent = hidden ? 'View more' : 'View less';
+    }
+    return;
+  }
+
+  if (btn.dataset.deleteAlert !== undefined) {
+    const card = btn.closest('.recipe-alert');
+    const recipeTitle = card ? card.querySelector('.card-title').textContent.trim() : '';
+    const alertId = btn.dataset.deleteAlert;
+    showConfirmModal({
+      title: 'Delete recipe alert?',
+      message: `This will permanently delete the recipe alert for <strong>${esc(recipeTitle)}</strong>.`,
+      onConfirm: () => {
+        deleteRecipeAlert(alertId);
+        toast('Recipe alert deleted.', 'success');
+        render(view, state);
+      },
+    });
     return;
   }
 
