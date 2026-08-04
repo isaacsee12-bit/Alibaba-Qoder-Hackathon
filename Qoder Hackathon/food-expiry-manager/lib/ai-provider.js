@@ -11,6 +11,10 @@ const {
   scanFoodImageWithGemini,
   validateGeminiApiKey,
 } = require('./gemini-food');
+const {
+  askRecipeAssistant,
+  isRecipeRequest,
+} = require('./recipe-assistant');
 
 const PROVIDERS = new Set(['openai', 'gemini']);
 
@@ -35,12 +39,17 @@ async function validateProviderApiKey(provider, apiKey) {
 
 async function askFoodAssistant(provider, apiKey, question, items) {
   const normalized = normalizeProvider(provider);
+  if (!normalized) {
+    const error = new Error('Unsupported AI provider');
+    error.status = 400;
+    error.code = 'INVALID_AI_PROVIDER';
+    throw error;
+  }
+  if (isRecipeRequest(question)) {
+    return askRecipeAssistant(normalized, apiKey, question, items);
+  }
   if (normalized === 'gemini') return askGeminiFoodAssistant(apiKey, question, items);
-  if (normalized === 'openai') return askOpenAiFoodAssistant(apiKey, question, items);
-  const error = new Error('Unsupported AI provider');
-  error.status = 400;
-  error.code = 'INVALID_AI_PROVIDER';
-  throw error;
+  return askOpenAiFoodAssistant(apiKey, question, items);
 }
 
 async function scanFoodImage(provider, apiKey, imageDataUrl) {
