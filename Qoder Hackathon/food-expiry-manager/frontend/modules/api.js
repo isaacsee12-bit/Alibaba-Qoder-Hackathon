@@ -2,6 +2,47 @@
 // All modules go through this; failures surface as friendly toasts via api.onError.
 
 const BASE = '/api';
+const ASSISTANT_CHAT_STORAGE_KEY = 'fem.assistantChat';
+const MAX_ASSISTANT_CONTEXT_MESSAGES = 10;
+
+function assistantHistoryFor(question) {
+  const current = String(question || '').trim();
+  let stored;
+  try {
+    stored = JSON.parse(localStorage.getItem(ASSISTANT_CHAT_STORAGE_KEY) || '[]');
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(stored)) return [];
+
+  const messages = stored
+    .map((entry) => {
+      const rawRole = String(entry?.role || '').toLowerCase();
+      const role = rawRole === 'user' ? 'user' : rawRole === 'bot' || rawRole === 'assistant' ? 'assistant' : null;
+      const text = String(entry?.text || '').trim().slice(0, 1200);
+      const prompt = String(entry?.prompt || '').trim();
+      return role && text ? { role, text, prompt } : null;
+    })
+    .filter(Boolean);
+
+  // The Ask UI stores the current user message before calling the API.
+  // Remove that duplicate because the current question is sent separately.
+  const trailing = messages[messages.length - 1];
+  if (trailing?.role === 'user' && current && trailing.text === current) messages.pop();
+
+  // Regeneration should use the conversation before the answer being replaced,
+  // not feed that answer back to the model and encourage an identical response.
+  const last = messages[messages.length - 1];
+  if (last?.role === 'assistant' && current && last.prompt === current) {
+    messages.pop();
+    const repeatedUser = messages[messages.length - 1];
+    if (repeatedUser?.role === 'user' && repeatedUser.text === current) messages.pop();
+  }
+
+  return messages
+    .slice(-MAX_ASSISTANT_CONTEXT_MESSAGES)
+    .map(({ role, text }) => ({ role, text }));
+}
 
 async function request(method, path, body, opts = {}) {
   let res;
@@ -58,7 +99,11 @@ export const api = {
   saveAiKey: (provider, key, opts) => request('POST', '/ai-key', { provider, key }, opts),
   testAiKey: (opts) => request('POST', '/ai-key', { action: 'test' }, opts),
   clearAiKey: (opts) => request('DELETE', '/ai-key', null, opts),
-  askAssistant: (payload, opts) => request('POST', '/assistant', payload, opts),
+  askAssistant: (payload, opts) => {
+    const body = { ...(payload || {}) };
+    if (!Array.isArray(body.history)) body.history = assistantHistoryFor(body.question);
+    return request('POST', '/assistant', body, opts);
+  },
   scanFoodWithAi: (imageDataUrl, opts) => request('POST', '/scan', { imageDataUrl }, opts),
 
   // reliability
