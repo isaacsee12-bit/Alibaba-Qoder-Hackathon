@@ -24,7 +24,7 @@ function isHowAreYou(value) {
 }
 
 function isHelpRequest(value) {
-  return /^(?:help|help\s+me|what\s+can\s+you\s+do|how\s+can\s+you\s+help|what\s+do\s+you\s+do)[!?.\s]*$/i.test(value);
+  return /^(?:help|help\s+me|can\s+you\s+help(?:\s+me)?|what\s+can\s+you\s+do|how\s+can\s+you\s+help(?:\s+me)?|what\s+do\s+you\s+do)[!?.\s]*$/i.test(value);
 }
 
 function isAcknowledgement(value) {
@@ -32,7 +32,12 @@ function isAcknowledgement(value) {
 }
 
 function hasFoodIntent(value) {
-  return /\b(?:food|meal|recipe|cook|cooking|make|prepare|eat|eating|ingredient|inventory|pantry|breakfast|lunch|dinner|snack|dish|expiry|expire|expired|waste|healthy|protein|vegetarian|vegan|spicy|sweet|quick|minute|leftover|freeze|fridge|substitute|replace|swap|serve)\b/i.test(value);
+  if (/\b(?:food|meal|recipe|cook|cooking|prepare|eat|eating|ingredient|inventory|pantry|breakfast|lunch|dinner|snack|dish|expiry|expire|expired|waste|healthy|protein|vegetarian|vegan|spicy|sweet|quick|minute|leftover|freeze|fridge|substitute|replace|swap|serve)\b/i.test(value)) {
+    return true;
+  }
+
+  return /\b(?:make|use)\b/i.test(value)
+    && /\b(?:what|which|something|anything|dish|breakfast|lunch|dinner|food|meal|recipe|inventory|pantry|ingredient)\b/i.test(value);
 }
 
 function isContextualFollowUp(value, history) {
