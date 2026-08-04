@@ -1,0 +1,21 @@
+/* Keep user messages compact instead of stretching into large cards. */
+.assistant-workspace .assistant-message-row-user .assistant-message-stack {
+  width: fit-content;
+  max-width: min(72%, 520px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.assistant-workspace .assistant-message-user {
+  width: fit-content !important;
+  max-width: 100% !important;
+  min-height: 0 !important;
+  padding: 10px 13px !important;
+}
+
+@media (max-width: 520px) {
+  .assistant-workspace .assistant-message-row-user .assistant-message-stack {
+    max-width: 84%;
+  }
+}
