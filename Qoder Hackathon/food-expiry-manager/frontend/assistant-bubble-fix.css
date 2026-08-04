@@ -1,21 +1,64 @@
-/* Keep user messages compact instead of stretching into large cards. */
-.assistant-workspace .assistant-message-row-user .assistant-message-stack {
-  width: fit-content;
-  max-width: min(72%, 520px);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+/* Definitive user-message sizing reset. This file is loaded after every Ask/theme stylesheet. */
+.assistant-workspace .assistant-message-row-user {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: flex-end !important;
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
 }
 
-.assistant-workspace .assistant-message-user {
-  width: fit-content !important;
-  max-width: 100% !important;
+.assistant-workspace .assistant-message-row-user > .assistant-message-stack {
+  display: block !important;
+  flex: 0 1 auto !important;
+  align-self: flex-start !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: min(68%, 500px) !important;
+  height: auto !important;
   min-height: 0 !important;
-  padding: 10px 13px !important;
+  max-height: none !important;
+  margin: 0 0 0 auto !important;
+  padding: 0 !important;
+}
+
+.assistant-workspace .assistant-message-row-user .assistant-message-user {
+  display: block !important;
+  position: static !important;
+  flex: none !important;
+  align-self: auto !important;
+  inline-size: fit-content !important;
+  width: fit-content !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  block-size: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+  margin: 0 !important;
+  padding: 8px 12px !important;
+  overflow: visible !important;
+  line-height: 1.35 !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+}
+
+.assistant-workspace .assistant-message-row-user .assistant-message-user > p {
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: inherit !important;
 }
 
 @media (max-width: 520px) {
-  .assistant-workspace .assistant-message-row-user .assistant-message-stack {
-    max-width: 84%;
+  .assistant-workspace .assistant-message-row-user > .assistant-message-stack {
+    max-width: 82% !important;
   }
 }
