@@ -15,6 +15,7 @@ const {
   askRecipeAssistant,
   isRecipeRequest,
 } = require('./recipe-assistant');
+const { buildContextualQuestion } = require('./assistant-conversation');
 
 const PROVIDERS = new Set(['openai', 'gemini']);
 
@@ -37,7 +38,7 @@ async function validateProviderApiKey(provider, apiKey) {
   throw error;
 }
 
-async function askFoodAssistant(provider, apiKey, question, items) {
+async function askFoodAssistant(provider, apiKey, question, items, history = []) {
   const normalized = normalizeProvider(provider);
   if (!normalized) {
     const error = new Error('Unsupported AI provider');
@@ -45,11 +46,14 @@ async function askFoodAssistant(provider, apiKey, question, items) {
     error.code = 'INVALID_AI_PROVIDER';
     throw error;
   }
-  if (isRecipeRequest(question)) {
-    return askRecipeAssistant(normalized, apiKey, question, items);
+
+  const currentQuestion = String(question || '').trim();
+  const contextualQuestion = buildContextualQuestion(currentQuestion, history);
+  if (isRecipeRequest(currentQuestion)) {
+    return askRecipeAssistant(normalized, apiKey, contextualQuestion, items);
   }
-  if (normalized === 'gemini') return askGeminiFoodAssistant(apiKey, question, items);
-  return askOpenAiFoodAssistant(apiKey, question, items);
+  if (normalized === 'gemini') return askGeminiFoodAssistant(apiKey, contextualQuestion, items);
+  return askOpenAiFoodAssistant(apiKey, contextualQuestion, items);
 }
 
 async function scanFoodImage(provider, apiKey, imageDataUrl) {
