@@ -1,0 +1,116 @@
+/* Light Ask panel theme. Loaded after all existing Ask styles. */
+.assistant-workspace {
+  --ask-bg: #f8fbf9;
+  --ask-surface: #ffffff;
+  --ask-surface-raised: #f1f7f4;
+  --ask-surface-soft: #e8f2ed;
+  --ask-border: rgba(16, 78, 57, .14);
+  --ask-border-strong: rgba(20, 128, 88, .34);
+  --ask-text: #15352a;
+  --ask-muted: #667c72;
+  --ask-green-bright: #16865d;
+  color: var(--ask-text) !important;
+}
+
+.assistant-starters {
+  padding: 10px 12px 14px !important;
+  border: 1px solid rgba(22, 104, 75, .11);
+  border-radius: 20px;
+  background: linear-gradient(145deg, #ffffff, #f4f9f6);
+  box-shadow: 0 12px 30px rgba(18, 72, 52, .06);
+}
+.assistant-section-heading span:first-child {
+  color: #568071 !important;
+  font-size: .7rem !important;
+  font-weight: 850 !important;
+}
+.assistant-section-heading h3 {
+  color: #163b2e !important;
+  font-size: 1.22rem !important;
+  font-weight: 850 !important;
+  letter-spacing: -.025em !important;
+  text-shadow: none !important;
+}
+.assistant-prompt-chip {
+  color: #476b5e !important;
+  background: #ffffff !important;
+  border-color: rgba(20, 100, 72, .15) !important;
+  box-shadow: 0 5px 14px rgba(17, 69, 50, .05);
+}
+.assistant-prompt-chip:hover {
+  color: #0d5f42 !important;
+  background: #eaf7f0 !important;
+  border-color: rgba(20, 128, 88, .34) !important;
+}
+.assistant-generate-button {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #238d68, #146447) !important;
+  border-color: transparent !important;
+}
+.assistant-generate-button span { color: #d9ffeb !important; }
+
+.assistant-workspace .assistant-chat {
+  border-color: rgba(18, 78, 58, .14) !important;
+  background: #ffffff !important;
+  box-shadow: 0 20px 48px rgba(15, 62, 45, .09) !important;
+}
+.assistant-workspace .assistant-chat:hover {
+  border-color: rgba(18, 78, 58, .18) !important;
+  box-shadow: 0 20px 48px rgba(15, 62, 45, .09) !important;
+}
+.assistant-chat-header {
+  color: #17382c !important;
+  background: #f4f9f6 !important;
+  border-bottom-color: rgba(18, 78, 58, .12) !important;
+}
+.assistant-chat-header > div > span,
+.assistant-status { color: #6b8177 !important; }
+.assistant-chat-header h3 { color: #17382c !important; }
+.assistant-workspace .assistant-messages {
+  background: radial-gradient(circle at 8% 0%, rgba(67, 179, 126, .07), transparent 24rem), #fbfdfc !important;
+  scrollbar-color: rgba(30, 125, 88, .35) transparent;
+}
+.assistant-empty-state h3 { color: #17382c !important; }
+.assistant-empty-state p { color: #687e74 !important; }
+.assistant-empty-points span { color: #4f6e61 !important; background: #edf5f1 !important; }
+.assistant-empty-icon { color: #177755 !important; background: #e7f6ee !important; box-shadow: none !important; }
+.assistant-avatar { color: #126747 !important; background: #e7f5ed !important; border-color: rgba(22, 119, 82, .18) !important; }
+
+.assistant-workspace .assistant-message-bot {
+  color: #203d32 !important;
+  background: #edf4f0 !important;
+  border-color: rgba(17, 76, 55, .08) !important;
+}
+.assistant-rich-text h4 { color: #17382c !important; }
+.assistant-rich-text code { color: #0e6545 !important; background: #dcece4 !important; }
+.assistant-message-action { color: #678078 !important; }
+.assistant-message-action:hover { color: #126f4d !important; background: #eef7f2 !important; }
+
+.assistant-recipe-card {
+  color: #203d32 !important;
+  background: linear-gradient(145deg, #ffffff, #f3f8f5) !important;
+  border-color: rgba(22, 117, 81, .2) !important;
+  box-shadow: 0 16px 36px rgba(15, 62, 45, .08) !important;
+}
+.assistant-recipe-header h3,
+.assistant-recipe-grid h4 { color: #17382c !important; }
+.assistant-recipe-eyebrow,
+.assistant-recipe-spark { color: #16865d !important; }
+.assistant-recipe-meta span { color: #567166 !important; background: #e9f3ee !important; }
+.assistant-recipe-summary,
+.assistant-recipe-grid ul,
+.assistant-recipe-grid ol,
+.assistant-recipe-card > .assistant-rich-text { color: #536d62 !important; }
+.assistant-recipe-grid,
+.assistant-recipe-grid section + section { border-color: rgba(18, 78, 58, .11) !important; }
+.assistant-recipe-note { color: #785c20 !important; background: #fff7df !important; }
+.assistant-recipe-note strong { color: #85651e !important; }
+
+.assistant-composer-wrap { background: #f4f8f6 !important; border-top-color: rgba(18, 78, 58, .11) !important; }
+.assistant-composer { background: #ffffff !important; border-color: rgba(18, 78, 58, .16) !important; }
+.assistant-composer textarea { color: #17382c !important; }
+.assistant-composer textarea::placeholder { color: #84958d !important; }
+.assistant-composer-button { color: #527064 !important; background: #edf3f0 !important; border-color: rgba(18, 78, 58, .09) !important; }
+.assistant-send-button { color: #ffffff !important; background: linear-gradient(145deg, #27966d, #176b4d) !important; }
+.assistant-send-button:disabled { color: #8b9b94 !important; background: #dde6e1 !important; }
+.assistant-composer-hint { color: #74877f !important; }
