@@ -15,8 +15,13 @@ class RecipeAssistantError extends Error {
 
 function isRecipeRequest(question) {
   const value = String(question || '').toLowerCase();
-  return /\b(recipe|ingredients section|numbered steps|cooking instructions|how to make)\b/.test(value)
+  const explicitRecipe = /\b(recipe|ingredients section|numbered steps|cooking instructions|how to make)\b/.test(value)
     && /\b(generate|create|build|make|provide|return|recipe)\b/.test(value);
+  const quickStartRecipe = /\b(expir(?:e|es|ing|y)|healthy|high[-\s]?protein|15[-\s]?minute|quick|fast)\b/.test(value)
+    && /\b(meal|cook|cooking|recipe|food|dish)\b/.test(value);
+  const anotherRecipe = /\b(another|different|new|alternative)\b/.test(value)
+    && /\b(recipe|meal|dish|option)\b/.test(value);
+  return explicitRecipe || quickStartRecipe || anotherRecipe;
 }
 
 function cleanRecipeItems(items) {
@@ -46,8 +51,14 @@ function recipeInstructions() {
   return [
     'You are FreshTrack, a food-inventory recipe assistant.',
     'Create one complete, practical recipe using ONLY ingredients present in the supplied inventory.',
+    'Treat the current user request as the primary objective: expiring-soon, healthy, 15-minute, and high-protein requests must produce recipes optimized for that specific goal.',
+    'If the recent conversation contains a previous recipe, do not repeat it. Choose a materially different recipe title, cooking method, and ingredient combination whenever the inventory allows.',
+    'For a request for another or different recipe, explicitly avoid the most recently suggested recipe.',
+    'For a high-protein request, prioritize genuine protein-rich inventory items. If none are available, state that limitation briefly and create the highest-protein option possible without falsely calling it high-protein.',
+    'For a 15-minute request, only claim 15 minutes when the listed steps can realistically be completed in that time; identify any ingredient that must already be cooked.',
+    'For an expiring-soon request, prioritize unexpired ingredients with the nearest expiry dates.',
+    'For a healthy request, emphasize vegetables and balanced portions while staying within the supplied inventory.',
     'Never add pantry staples, seasonings, oils, water, garnishes, or optional ingredients unless they appear in the inventory.',
-    'Prioritize unexpired ingredients with the nearest expiry dates.',
     'Return plain text with these exact sections: a short recipe title on the first line, Ingredients, Steps, and Food safety note.',
     'Under Ingredients, list quantities using the available inventory amounts where possible.',
     'Under Steps, provide clear numbered cooking instructions.',
@@ -115,7 +126,7 @@ async function requestOpenAIRecipe(apiKey, question, items, maxOutputTokens) {
       store: false,
       max_output_tokens: maxOutputTokens,
       instructions: recipeInstructions(),
-      input: `Inventory:\n${inventoryText(items)}\n\nUser request:\n${String(question || '').slice(0, 1200)}`,
+      input: `Inventory:\n${inventoryText(items)}\n\nUser request and recent context:\n${String(question || '').slice(0, 1200)}`,
     }),
   });
 
@@ -172,7 +183,7 @@ async function requestGeminiRecipe(apiKey, model, question, items, maxOutputToke
         contents: [{
           role: 'user',
           parts: [{
-            text: `Inventory:\n${inventoryText(items)}\n\nUser request:\n${String(question || '').slice(0, 1200)}`,
+            text: `Inventory:\n${inventoryText(items)}\n\nUser request and recent context:\n${String(question || '').slice(0, 1200)}`,
           }],
         }],
         generationConfig,
