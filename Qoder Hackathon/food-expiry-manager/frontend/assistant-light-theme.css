@@ -27,6 +27,7 @@
   opacity: 1 !important;
 }
 .assistant-section-heading h3 {
+  display: block !important;
   margin: 0 !important;
   color: #10231d !important;
   font-size: 1.16rem !important;
@@ -251,6 +252,11 @@
 .assistant-send-button:disabled {
   color: #8a9991 !important;
   background: #e5ebe7 !important;
+}
+.assistant-mic-button.is-listening {
+  color: #ffffff !important;
+  border-color: rgba(176, 43, 43, .28) !important;
+  background: #c94f4f !important;
 }
 .assistant-composer-hint {
   color: #74877d !important;
