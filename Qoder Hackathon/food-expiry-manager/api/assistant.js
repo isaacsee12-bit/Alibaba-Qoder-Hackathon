@@ -4,10 +4,8 @@ const {
   cleanItems,
   friendlyAiError,
 } = require('../lib/ai-provider');
-const {
-  cleanHistory,
-  fallbackAnswer,
-} = require('../lib/assistant-conversation');
+const { cleanHistory } = require('../lib/assistant-conversation');
+const { conversationalFallbackAnswer } = require('../lib/assistant-response');
 
 function json(res, status, body) {
   res.statusCode = status;
@@ -60,7 +58,7 @@ module.exports = async function handler(req, res) {
   const resolved = resolveApiKey(req);
   if (!resolved.key || !resolved.provider) {
     return json(res, 200, {
-      answer: fallbackAnswer(question, items, goals, history),
+      answer: conversationalFallbackAnswer(question, items, goals, history),
       ai: false,
       provider: null,
       keySource: 'none',
@@ -86,7 +84,7 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     console.error(`${resolved.provider} assistant failed:`, error.message);
     return json(res, 200, {
-      answer: fallbackAnswer(question, items, goals, history),
+      answer: conversationalFallbackAnswer(question, items, goals, history),
       ai: false,
       provider: resolved.provider,
       keySource: resolved.source,

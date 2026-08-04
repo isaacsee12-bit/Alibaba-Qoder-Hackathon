@@ -1,0 +1,274 @@
+/* Final Ask theme alignment: use the same light, premium surfaces as the rest of FreshTrack. */
+.assistant-workspace {
+  --ask-bg: #f7faf8;
+  --ask-surface: #ffffff;
+  --ask-surface-raised: #f1f7f3;
+  --ask-surface-soft: #eaf3ee;
+  --ask-border: rgba(18, 68, 52, .12);
+  --ask-border-strong: rgba(25, 137, 89, .30);
+  --ask-text: #10231d;
+  --ask-muted: #66786f;
+  --ask-green: #16895a;
+  --ask-green-bright: #1a9965;
+  --ask-green-deep: #0a4d38;
+  --ask-amber: #b77b24;
+  color: var(--ask-text) !important;
+}
+
+/* Quick-start heading: force readable contrast instead of white text on the page background. */
+.assistant-starters {
+  padding: 7px 4px 3px;
+}
+.assistant-section-heading > div {
+  gap: 4px;
+}
+.assistant-section-heading span:first-child {
+  color: #61756b !important;
+  opacity: 1 !important;
+}
+.assistant-section-heading h3 {
+  display: block !important;
+  margin: 0 !important;
+  color: #10231d !important;
+  font-size: 1.16rem !important;
+  font-weight: 820 !important;
+  line-height: 1.15 !important;
+  letter-spacing: -.025em !important;
+  text-transform: none !important;
+  text-shadow: none !important;
+}
+.assistant-generate-button {
+  color: #ffffff !important;
+  border-color: rgba(18, 104, 76, .20) !important;
+  background: linear-gradient(135deg, #2d9a72, #176c50) !important;
+  box-shadow: 0 11px 25px rgba(15, 91, 66, .16) !important;
+}
+.assistant-generate-button span {
+  color: #dff8eb !important;
+}
+.assistant-prompt-chip {
+  color: #526b5f !important;
+  border-color: rgba(18, 68, 52, .11) !important;
+  background: rgba(255, 255, 255, .88) !important;
+  box-shadow: 0 6px 16px rgba(17, 55, 43, .04);
+}
+.assistant-prompt-chip:hover {
+  color: #0f6849 !important;
+  border-color: rgba(25, 137, 89, .32) !important;
+  background: #eef8f2 !important;
+}
+
+/* Inventory context card. */
+.assistant-inventory-summary {
+  color: var(--ask-text) !important;
+  border-color: var(--ask-border) !important;
+  background: linear-gradient(145deg, #ffffff, #f5f9f6) !important;
+  box-shadow: 0 12px 30px rgba(17, 55, 43, .06) !important;
+}
+.assistant-inventory-stats strong {
+  color: #167552 !important;
+}
+.assistant-inventory-stats span,
+.assistant-inventory-empty span {
+  color: var(--ask-muted) !important;
+}
+.assistant-inventory-items span {
+  color: #50685c !important;
+  border-color: rgba(18, 68, 52, .09) !important;
+  background: #f1f6f3 !important;
+}
+.assistant-inline-link {
+  color: #14734d !important;
+}
+
+/* Main conversation card. */
+.assistant-workspace .assistant-chat,
+.assistant-workspace .assistant-chat:hover {
+  color: var(--ask-text) !important;
+  border-color: rgba(18, 68, 52, .13) !important;
+  background: #ffffff !important;
+  box-shadow: 0 20px 52px rgba(17, 55, 43, .09) !important;
+}
+.assistant-chat-header {
+  color: var(--ask-text) !important;
+  border-bottom-color: rgba(18, 68, 52, .10) !important;
+  background: linear-gradient(180deg, #ffffff, #f8fbf9) !important;
+}
+.assistant-chat-header > div > span {
+  color: #64786e !important;
+}
+.assistant-chat-header h3 {
+  color: #10231d !important;
+  text-shadow: none !important;
+}
+.assistant-status {
+  color: #6d8077 !important;
+}
+.assistant-workspace .assistant-messages {
+  color: var(--ask-text) !important;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(63, 172, 119, .07), transparent 28rem),
+    linear-gradient(180deg, #f9fcfa, #f5f9f6) !important;
+  scrollbar-color: rgba(25, 137, 89, .30) transparent !important;
+}
+
+/* Empty state and assistant responses. */
+.assistant-empty-icon {
+  color: #167552 !important;
+  border-color: rgba(25, 137, 89, .22) !important;
+  background: #e8f5ee !important;
+  box-shadow: 0 10px 25px rgba(17, 83, 57, .08) !important;
+}
+.assistant-empty-state h3 {
+  color: #10231d !important;
+}
+.assistant-empty-state p {
+  color: var(--ask-muted) !important;
+}
+.assistant-empty-points span {
+  color: #536b5f !important;
+  border: 1px solid rgba(18, 68, 52, .07);
+  background: #edf5f0 !important;
+}
+.assistant-avatar {
+  color: #ffffff !important;
+  border-color: rgba(18, 104, 76, .15) !important;
+  background: linear-gradient(145deg, #2c9a70, #12684c) !important;
+  box-shadow: 0 7px 15px rgba(15, 91, 66, .13);
+}
+.assistant-workspace .assistant-message {
+  color: #17362a !important;
+}
+.assistant-workspace .assistant-message-bot {
+  color: #17362a !important;
+  border-color: rgba(18, 68, 52, .08) !important;
+  background: #ffffff !important;
+  box-shadow: 0 8px 22px rgba(17, 55, 43, .06);
+}
+.assistant-workspace .assistant-message-user {
+  color: #ffffff !important;
+  border-color: rgba(13, 96, 69, .16) !important;
+  background: linear-gradient(135deg, #24936b, #12684c) !important;
+}
+.assistant-rich-text h4 {
+  color: #17362a !important;
+}
+.assistant-rich-text code {
+  color: #0d6847 !important;
+  background: #e9f4ee !important;
+}
+.assistant-message-action {
+  color: #687d72 !important;
+}
+.assistant-message-action:hover,
+.assistant-message-action.is-saved {
+  color: #12684c !important;
+  border-color: rgba(18, 104, 76, .12) !important;
+  background: #eef7f2 !important;
+}
+
+/* Recipe results use a white card instead of a dark card. */
+.assistant-recipe-card {
+  color: #17362a !important;
+  border-color: rgba(18, 104, 76, .15) !important;
+  background: linear-gradient(145deg, #ffffff, #f7faf8) !important;
+  box-shadow: 0 16px 38px rgba(17, 55, 43, .08) !important;
+}
+.assistant-recipe-eyebrow,
+.assistant-recipe-spark {
+  color: #16895a !important;
+}
+.assistant-recipe-header h3 {
+  color: #10231d !important;
+  text-shadow: none !important;
+}
+.assistant-recipe-meta span {
+  color: #587064 !important;
+  border: 1px solid rgba(18, 68, 52, .07);
+  background: #edf5f0 !important;
+}
+.assistant-recipe-summary,
+.assistant-recipe-card > .assistant-rich-text {
+  color: #5e7469 !important;
+}
+.assistant-recipe-grid {
+  border-color: rgba(18, 68, 52, .10) !important;
+  background: rgba(246, 250, 247, .72);
+}
+.assistant-recipe-grid section + section {
+  border-color: rgba(18, 68, 52, .10) !important;
+}
+.assistant-recipe-grid h4 {
+  color: #17362a !important;
+}
+.assistant-recipe-grid ul,
+.assistant-recipe-grid ol {
+  color: #52685d !important;
+}
+.assistant-recipe-note {
+  color: #785d28 !important;
+  background: #fff7e6 !important;
+}
+.assistant-recipe-note strong {
+  color: #946d20 !important;
+}
+
+/* Composer matches the app's form controls. */
+.assistant-composer-wrap {
+  border-top-color: rgba(18, 68, 52, .10) !important;
+  background: #ffffff !important;
+}
+.assistant-composer {
+  border-color: rgba(18, 68, 52, .13) !important;
+  background: #f6f9f7 !important;
+  box-shadow: inset 0 1px 2px rgba(17, 55, 43, .025);
+}
+.assistant-composer:focus-within {
+  border-color: #2b8f6a !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 4px rgba(43, 143, 106, .10) !important;
+}
+.assistant-composer textarea {
+  color: #17362a !important;
+}
+.assistant-composer textarea::placeholder {
+  color: #7b8d84 !important;
+}
+.assistant-composer-button {
+  color: #587064 !important;
+  border-color: rgba(18, 68, 52, .09) !important;
+  background: #edf3ef !important;
+}
+.assistant-composer-button:hover:not(:disabled) {
+  color: #12684c !important;
+  border-color: rgba(18, 104, 76, .22) !important;
+  background: #e5f2eb !important;
+}
+.assistant-send-button {
+  color: #ffffff !important;
+  border-color: transparent !important;
+  background: linear-gradient(145deg, #2c9a70, #12684c) !important;
+}
+.assistant-send-button:disabled {
+  color: #8a9991 !important;
+  background: #e5ebe7 !important;
+}
+.assistant-mic-button.is-listening {
+  color: #ffffff !important;
+  border-color: rgba(176, 43, 43, .28) !important;
+  background: #c94f4f !important;
+}
+.assistant-composer-hint {
+  color: #74877d !important;
+}
+
+.assistant-typing span,
+.assistant-inventory-loading span {
+  background: #16895a !important;
+}
+
+@media (max-width: 520px) {
+  .assistant-section-heading h3 {
+    font-size: 1.06rem !important;
+  }
+}
